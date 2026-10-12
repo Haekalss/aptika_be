@@ -1457,6 +1457,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.daftar-penyedia.destroy',
                 ]);
 
+            // Formulir Evaluasi Kepatuhan Terhadap Regulasi dan Aturan Lain (FR-044)
+            Route::get('evaluasi-kepatuhan/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiEvaluasiKepatuhanController::class, 'exportDocx'])
+                ->name('smki.evaluasi-kepatuhan.export-docx');
+            Route::apiResource('evaluasi-kepatuhan', \App\Http\Controllers\Smki\SmkiEvaluasiKepatuhanController::class)
+                ->names([
+                    'index'   => 'smki.evaluasi-kepatuhan.index',
+                    'store'   => 'smki.evaluasi-kepatuhan.store',
+                    'show'    => 'smki.evaluasi-kepatuhan.show',
+                    'update'  => 'smki.evaluasi-kepatuhan.update',
+                    'destroy' => 'smki.evaluasi-kepatuhan.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
