@@ -68,7 +68,15 @@ class SmkiByodDocxService
         $this->fillUnitKerjaSentence($xp, $form);
         $this->fillDevices($dom, $xp, $tables->item(1), $form);
         $this->fillSignatureDate($xp, $form);
+        $this->applyPortraitLayout($xp);
         $zip->addFromString('word/document.xml', $dom->saveXML());
+
+        // Tabel kop (header) disamakan lebarnya dengan tabel isi.
+        $header = $this->loadPart($zip, 'word/header1.xml');
+        if ($header) {
+            $this->fitTablesToWidth($this->docxXPath($header), self::CONTENT_WIDTH);
+            $zip->addFromString('word/header1.xml', $header->saveXML());
+        }
 
         // Footer template memakai " of 1" statis; ganti dengan field NUMPAGES agar benar bila >1 halaman.
         $footer = $this->loadPart($zip, 'word/footer1.xml');
@@ -80,6 +88,82 @@ class SmkiByodDocxService
         $zip->close();
 
         return $output;
+    }
+
+    /** Lebar area isi (twip) pada kertas A4 potret dengan margin kiri/kanan 720. */
+    private const CONTENT_WIDTH = 10466;
+
+    /**
+     * Samakan tata letak dengan formulir SMKI lain: kertas A4 potret dan semua tabel
+     * selebar area isi (template asli berorientasi landscape dengan tabel berbeda-beda lebarnya).
+     */
+    private function applyPortraitLayout($xp): void
+    {
+        $pgSz = $xp->query('//w:body/w:sectPr/w:pgSz')->item(0);
+        if ($pgSz) {
+            $pgSz->setAttributeNS(self::W_NS, 'w:w', '11906');
+            $pgSz->setAttributeNS(self::W_NS, 'w:h', '16838');
+            $pgSz->removeAttributeNS(self::W_NS, 'orient');
+        }
+        $pgMar = $xp->query('//w:body/w:sectPr/w:pgMar')->item(0);
+        if ($pgMar) {
+            $pgMar->setAttributeNS(self::W_NS, 'w:left', '720');
+            $pgMar->setAttributeNS(self::W_NS, 'w:right', '720');
+        }
+        $this->fitTablesToWidth($xp, self::CONTENT_WIDTH, '//w:body/w:tbl');
+
+        // Kolom "No" tabel perangkat dilebarkan agar tidak terpecah per huruf.
+        $tables = $xp->query('//w:body/w:tbl');
+        if ($tables->length >= 2) {
+            $widths = [700, 2100, 1800, 1500, 2100, 2266];
+            $tbl = $tables->item(1);
+            foreach ($xp->query('w:tblGrid/w:gridCol', $tbl) as $i => $g) {
+                if (isset($widths[$i])) {
+                    $g->setAttributeNS(self::W_NS, 'w:w', (string) $widths[$i]);
+                }
+            }
+            foreach ($xp->query('w:tr', $tbl) as $tr) {
+                foreach ($xp->query('w:tc/w:tcPr/w:tcW', $tr) as $i => $w) {
+                    if (isset($widths[$i])) {
+                        $w->setAttributeNS(self::W_NS, 'w:w', (string) $widths[$i]);
+                    }
+                }
+            }
+        }
+
+        // Kotak spesimen TTE digeser ke kiri agar tetap di dalam kertas potret.
+        foreach ($xp->query('//*[local-name()="positionH"]/*[local-name()="posOffset"]') as $o) {
+            $o->nodeValue = (string) max(0, ((int) $o->nodeValue) - 909680);
+        }
+        foreach ($xp->query('//*[@style]') as $el) {
+            $style = $el->getAttribute('style');
+            if (strpos($style, 'position:absolute') !== false && preg_match('/margin-left:([\d.]+)pt/', $style, $m)) {
+                $el->setAttribute('style', preg_replace('/margin-left:[\d.]+pt/', 'margin-left:' . round(max(0, (float) $m[1] - 71.6), 1) . 'pt', $style, 1));
+            }
+        }
+    }
+
+    private function fitTablesToWidth($xp, int $target, string $query = '//w:tbl'): void
+    {
+        foreach ($xp->query($query) as $tbl) {
+            $tblW = $xp->query('w:tblPr/w:tblW', $tbl)->item(0);
+            $cur = $tblW ? (int) $tblW->getAttributeNS(self::W_NS, 'w') : 0;
+            if ($cur <= 0) {
+                continue;
+            }
+            $f = $target / $cur;
+            $tblW->setAttributeNS(self::W_NS, 'w:w', (string) $target);
+            $ind = $xp->query('w:tblPr/w:tblInd', $tbl)->item(0);
+            if ($ind) {
+                $ind->setAttributeNS(self::W_NS, 'w:w', '0');
+            }
+            foreach ($xp->query('w:tblGrid/w:gridCol', $tbl) as $g) {
+                $g->setAttributeNS(self::W_NS, 'w:w', (string) max(1, (int) round(((int) $g->getAttributeNS(self::W_NS, 'w')) * $f)));
+            }
+            foreach ($xp->query('w:tr/w:tc/w:tcPr/w:tcW', $tbl) as $w) {
+                $w->setAttributeNS(self::W_NS, 'w:w', (string) max(1, (int) round(((int) $w->getAttributeNS(self::W_NS, 'w')) * $f)));
+            }
+        }
     }
 
     private function fillIdentity($dom, $xp, $table, SmkiByodForm $form): void
