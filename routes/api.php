@@ -1469,6 +1469,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.evaluasi-kepatuhan.destroy',
                 ]);
 
+            // Formulir Review Log (FR-040)
+            Route::apiResource('review-log', \App\Http\Controllers\Smki\SmkiReviewLogController::class)
+                ->names([
+                    'index'   => 'smki.review-log.index',
+                    'store'   => 'smki.review-log.store',
+                    'show'    => 'smki.review-log.show',
+                    'update'  => 'smki.review-log.update',
+                    'destroy' => 'smki.review-log.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
