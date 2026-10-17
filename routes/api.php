@@ -1481,6 +1481,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.review-log.destroy',
                 ]);
 
+            // Formulir Bring Your Own Device / Penggunaan Perangkat Pribadi (FR-045)
+            Route::get('perangkat-pribadi/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiByodController::class, 'exportDocx'])
+                ->name('smki.perangkat-pribadi.export-docx');
+            Route::apiResource('perangkat-pribadi', \App\Http\Controllers\Smki\SmkiByodController::class)
+                ->names([
+                    'index'   => 'smki.perangkat-pribadi.index',
+                    'store'   => 'smki.perangkat-pribadi.store',
+                    'show'    => 'smki.perangkat-pribadi.show',
+                    'update'  => 'smki.perangkat-pribadi.update',
+                    'destroy' => 'smki.perangkat-pribadi.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
