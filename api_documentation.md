@@ -263,6 +263,45 @@ Standar formulir FR014-SMKI untuk pencatatan resmi pemusnahan media penyimpanan,
 
 ---
 
+## 10. SMKI - Formulir Review Log (FR-040)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/review-log` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-040/KOM.03.05/SANDIKAMI (Rev 1.0, berlaku 07-Jul-2022) untuk pencatatan hasil review log akses/aktivitas sistem: identitas review, tabel log (User, IP, Tanggal, Waktu, Durasi), tindak lanjut, dan blok tanda tangan (Dibuat Oleh / Mengetahui).
+
+### Endpoints
+- `GET /api/smki/review-log` : Daftar review log dengan paginasi + ringkasan KPI (`total_review`, `total_log`, `review_bulan_ini`, `ada_tindak_lanjut`).
+  - Query parameters: `search` (obyek, pelaksana, tindak lanjut, user/IP pada log), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/review-log` : Menyimpan formulir baru beserta array rincian log (`items`).
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_review": "2026-10-01",
+      "periode_mulai": "2026-09-01",
+      "periode_selesai": "2026-09-30",
+      "obyek_review": "Server Aplikasi SIMPEG",
+      "pelaksana_review": "Tim Keamanan Informasi",
+      "tindak_lanjut": "Menonaktifkan akun yang tidak dikenal.",
+      "dibuat_oleh_nama": "Budi Santoso",
+      "dibuat_oleh_nip": "199001012015011001",
+      "mengetahui_nama": "Kepala Bidang",
+      "mengetahui_nip": "198001012010011001",
+      "ditandatangani_di": "Bandung",
+      "tanggal_ttd": "2026-10-02",
+      "items": [
+        { "user_log": "admin01", "ip_address": "10.10.1.5", "tanggal": "2026-09-10", "waktu": "08:15", "durasi": "45 menit" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_review`, `obyek_review`, `pelaksana_review`; tiap baris `items` wajib `user_log`, `ip_address`, `tanggal`, `waktu` (`HH:MM`), `durasi`.
+- `GET /api/smki/review-log/{id}` : Detail formulir beserta `items`.
+- `PUT /api/smki/review-log/{id}` : Memperbarui formulir dan menyinkronkan ulang `items`.
+- `DELETE /api/smki/review-log/{id}` : Menghapus formulir (soft-delete, rincian log ikut terhapus).
+- `GET /api/smki/review-log/{id}/export-docx` : Unduh formulir FR-040 (.docx) hasil pengisian template asli `resources/templates/FR-040 Formulir Review Log.docx`.
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 
