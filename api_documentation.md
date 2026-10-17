@@ -263,6 +263,38 @@ Standar formulir FR014-SMKI untuk pencatatan resmi pemusnahan media penyimpanan,
 
 ---
 
+## 10. SMKI - Formulir BYOD / Penggunaan Perangkat Pribadi (FR-045)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/perangkat-pribadi` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-045/KOM.03/05/SANDIKAMI (Rev 0.0, berlaku 13 Juli 2023) berupa surat pernyataan Kepala Unit Kerja mengenai penggunaan perangkat pribadi (Bring Your Own Device) di lingkungan unit kerja, lengkap dengan daftar perangkat.
+
+### Endpoints
+- `GET /api/smki/perangkat-pribadi` : Daftar formulir dengan paginasi + ringkasan KPI (`total_formulir`, `total_perangkat`, `laptop`, `pc`, `tab`).
+  - Query parameters: `search` (nama, NIP, unit kerja, atau data perangkat), `jenis_perangkat` (`Laptop|PC|Tab`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/perangkat-pribadi` : Menyimpan formulir baru beserta array `perangkat`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "nama": "Budi Santoso",
+      "nip": "198001012010011001",
+      "jabatan": "Kepala Bidang Aptika",
+      "unit_kerja": "Bidang Aptika",
+      "ditandatangani_di": "Bandung",
+      "tanggal_ttd": "2026-10-17",
+      "perangkat": [
+        { "nama": "Dina Pratiwi", "nip": "199202022018021001", "jenis_perangkat": "Laptop", "merek_tipe": "Lenovo ThinkPad E14", "nomor_seri": "PF3ABC12" }
+      ]
+    }
+    ```
+  - Wajib: `nama`, `jabatan`, `unit_kerja`, minimal 1 `perangkat`; tiap perangkat wajib `nama`, `jenis_perangkat` (`Laptop`/`PC`/`Tab`), `merek_tipe`, `nomor_seri`.
+- `GET /api/smki/perangkat-pribadi/{id}` : Detail formulir beserta `perangkat`.
+- `PUT /api/smki/perangkat-pribadi/{id}` : Memperbarui formulir dan menyinkronkan ulang `perangkat`.
+- `DELETE /api/smki/perangkat-pribadi/{id}` : Menghapus formulir (soft-delete, rincian perangkat ikut terhapus).
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 
