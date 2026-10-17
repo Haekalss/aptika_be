@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Smki;
 use App\Http\Controllers\Controller;
 use App\Models\SmkiReviewLog;
 use App\Models\SmkiReviewLogItem;
+use App\Services\SmkiReviewLogDocxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -13,6 +14,10 @@ use Illuminate\Support\Facades\DB;
  */
 class SmkiReviewLogController extends Controller
 {
+    public function __construct(private SmkiReviewLogDocxService $docxService)
+    {
+    }
+
     /**
      * Daftar review log + pencarian/filter + ringkasan statistik.
      */
@@ -184,5 +189,28 @@ class SmkiReviewLogController extends Controller
         $review->delete();
 
         return response()->json(['success' => true, 'message' => 'Formulir review log berhasil dihapus!']);
+    }
+
+    /**
+     * Unduh formulir FR-040 (.docx) dari template asli.
+     */
+    public function exportDocx($id)
+    {
+        try {
+            $log = SmkiReviewLog::with('items')->findOrFail($id);
+            $path = $this->docxService->generateDocx($log);
+            $name = 'FR-040_Review_Log_' . $log->tanggal_review->format('Y-m-d') . '.docx';
+
+            return response()->download($path, $name, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['success' => false, 'message' => 'Data review log tidak ditemukan.'], 404);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mencetak dokumen. Silakan coba beberapa saat lagi. (' . $e->getMessage() . ')',
+            ], 500);
+        }
     }
 }

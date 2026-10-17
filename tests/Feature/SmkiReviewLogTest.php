@@ -97,4 +97,43 @@ class SmkiReviewLogTest extends TestCase
         $this->getJson('/api/smki/review-log')->assertOk()->assertJsonPath('stats.total_review', 0);
         $this->getJson("/api/smki/review-log/{$id}")->assertStatus(404);
     }
+
+    public function test_export_docx_fills_original_template(): void
+    {
+        $this->actingBidangUser();
+        $id = $this->postJson('/api/smki/review-log', $this->payload([
+            'dibuat_oleh_nama' => 'Budi Santoso',
+            'dibuat_oleh_nip'  => '199001012015011001',
+            'mengetahui_nama'  => 'Kepala Bidang Aptika',
+        ]))->json('data.id');
+
+        $response = $this->get("/api/smki/review-log/{$id}/export-docx");
+        $response->assertOk();
+        $file = $response->baseResponse->getFile()->getPathname();
+        if (($out = getenv('EXPORT_SAMPLE_DIR')) !== false && $out !== '') {
+            copy($file, rtrim($out, '/') . '/fr040-sample.docx');
+        }
+
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($file) === true);
+        $text = strip_tags(str_replace('</w:p>', "\n", $zip->getFromName('word/document.xml')));
+        $zip->close();
+
+        $this->assertStringContainsString('FORMULIR REVIEW LOG', $text);
+        $this->assertStringContainsString('FR-040/KOM.03.05/SANDIKAMI', $text);
+        $this->assertStringContainsString('Tanggal Review : 1 Oktober 2026', preg_replace('/\x{00A0}/u', ' ', $text));
+        $this->assertStringContainsString('Periode Review : 1 September 2026 s.d. 30 September 2026', preg_replace('/\x{00A0}/u', ' ', $text));
+        $this->assertStringContainsString('admin01', $text);
+        $this->assertStringContainsString('10.10.1.9', $text);
+        $this->assertStringContainsString('Menonaktifkan akun yang tidak dikenal.', $text);
+        $this->assertStringContainsString('Bandung, 2 Oktober 2026', $text);
+        $this->assertStringContainsString('(Budi Santoso)', $text);
+        $this->assertStringContainsString('NIP. 199001012015011001', $text);
+    }
+
+    public function test_export_docx_returns_404_for_unknown_id(): void
+    {
+        $this->actingBidangUser();
+        $this->getJson('/api/smki/review-log/9999/export-docx')->assertStatus(404);
+    }
 }

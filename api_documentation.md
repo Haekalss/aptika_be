@@ -298,6 +298,7 @@ Standar formulir FR-040/KOM.03.05/SANDIKAMI (Rev 1.0, berlaku 07-Jul-2022) untuk
 - `GET /api/smki/review-log/{id}` : Detail formulir beserta `items`.
 - `PUT /api/smki/review-log/{id}` : Memperbarui formulir dan menyinkronkan ulang `items`.
 - `DELETE /api/smki/review-log/{id}` : Menghapus formulir (soft-delete, rincian log ikut terhapus).
+- `GET /api/smki/review-log/{id}/export-docx` : Unduh formulir FR-040 (.docx) hasil pengisian template asli `resources/templates/FR-040 Formulir Review Log.docx`.
 
 ---
 

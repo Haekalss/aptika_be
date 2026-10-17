@@ -1470,6 +1470,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                 ]);
 
             // Formulir Review Log (FR-040)
+            Route::get('review-log/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviewLogController::class, 'exportDocx'])
+                ->name('smki.review-log.export-docx');
             Route::apiResource('review-log', \App\Http\Controllers\Smki\SmkiReviewLogController::class)
                 ->names([
                     'index'   => 'smki.review-log.index',
