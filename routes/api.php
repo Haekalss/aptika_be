@@ -1470,6 +1470,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                 ]);
 
             // Formulir Bring Your Own Device / Penggunaan Perangkat Pribadi (FR-045)
+            Route::get('perangkat-pribadi/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiByodController::class, 'exportDocx'])
+                ->name('smki.perangkat-pribadi.export-docx');
             Route::apiResource('perangkat-pribadi', \App\Http\Controllers\Smki\SmkiByodController::class)
                 ->names([
                     'index'   => 'smki.perangkat-pribadi.index',

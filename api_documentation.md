@@ -292,6 +292,7 @@ Standar formulir FR-045/KOM.03/05/SANDIKAMI (Rev 0.0, berlaku 13 Juli 2023) beru
 - `GET /api/smki/perangkat-pribadi/{id}` : Detail formulir beserta `perangkat`.
 - `PUT /api/smki/perangkat-pribadi/{id}` : Memperbarui formulir dan menyinkronkan ulang `perangkat`.
 - `DELETE /api/smki/perangkat-pribadi/{id}` : Menghapus formulir (soft-delete, rincian perangkat ikut terhapus).
+- `GET /api/smki/perangkat-pribadi/{id}/export-docx` : Unduh formulir FR-045 (.docx) hasil pengisian template asli `resources/templates/FR-045 Formulir BYOD.docx`.
 
 ---
 

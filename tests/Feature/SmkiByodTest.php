@@ -93,4 +93,59 @@ class SmkiByodTest extends TestCase
         $this->getJson('/api/smki/perangkat-pribadi')->assertOk()->assertJsonPath('stats.total_formulir', 0);
         $this->getJson("/api/smki/perangkat-pribadi/{$id}")->assertStatus(404);
     }
+
+    public function test_export_docx_fills_original_template(): void
+    {
+        $this->actingBidangUser();
+        $id = $this->postJson('/api/smki/perangkat-pribadi', $this->payload())->json('data.id');
+
+        $response = $this->get("/api/smki/perangkat-pribadi/{$id}/export-docx");
+        $response->assertOk();
+        $file = $response->baseResponse->getFile()->getPathname();
+        if (($out = getenv('EXPORT_SAMPLE_DIR')) !== false && $out !== '') {
+            copy($file, rtrim($out, '/') . '/fr045-sample.docx');
+        }
+
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($file) === true);
+        $text = strip_tags(str_replace('</w:p>', "\n", $zip->getFromName('word/document.xml')));
+        $footer = $zip->getFromName('word/footer1.xml');
+        $zip->close();
+
+        $this->assertStringContainsString('Budi Santoso', $text);
+        $this->assertStringContainsString('198001012010011001', $text);
+        $this->assertStringContainsString('Kepala Bidang Aptika', $text);
+        $this->assertStringContainsString('di Bidang Aptika adalah sebagai berikut', $text);
+        $this->assertStringNotContainsString('[Unit Kerja]', $text);
+        $this->assertStringContainsString('Dina Pratiwi', $text);
+        $this->assertStringContainsString('Lenovo E14', $text);
+        $this->assertStringContainsString('DMPXYZ99', $text);
+        $this->assertStringContainsString('Bandung, 17 Oktober 2026', $text);
+        $this->assertStringContainsString('Spesimen TTE Kepala Unit Kerja', $text);
+        $this->assertStringContainsString('NUMPAGES', $footer);
+    }
+
+    public function test_export_docx_adds_rows_beyond_template_minimum(): void
+    {
+        $this->actingBidangUser();
+        $devices = [];
+        for ($i = 1; $i <= 7; $i++) {
+            $devices[] = ['nama' => "Pemilik {$i}", 'nip' => null, 'jenis_perangkat' => 'PC', 'merek_tipe' => "PC-{$i}", 'nomor_seri' => "SN{$i}"];
+        }
+        $id = $this->postJson('/api/smki/perangkat-pribadi', $this->payload(['perangkat' => $devices]))->json('data.id');
+
+        $file = $this->get("/api/smki/perangkat-pribadi/{$id}/export-docx")->baseResponse->getFile()->getPathname();
+        $zip = new \ZipArchive();
+        $zip->open($file);
+        $text = strip_tags(str_replace('</w:p>', "\n", $zip->getFromName('word/document.xml')));
+        $zip->close();
+        $this->assertStringContainsString('Pemilik 7', $text);
+        $this->assertStringContainsString('SN7', $text);
+    }
+
+    public function test_export_docx_returns_404_for_unknown_id(): void
+    {
+        $this->actingBidangUser();
+        $this->getJson('/api/smki/perangkat-pribadi/9999/export-docx')->assertStatus(404);
+    }
 }

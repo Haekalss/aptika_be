@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Smki;
 use App\Http\Controllers\Controller;
 use App\Models\SmkiByodDevice;
 use App\Models\SmkiByodForm;
+use App\Services\SmkiByodDocxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -13,6 +14,10 @@ use Illuminate\Support\Facades\DB;
  */
 class SmkiByodController extends Controller
 {
+    public function __construct(private SmkiByodDocxService $docxService)
+    {
+    }
+
     /**
      * Daftar formulir + pencarian/filter + ringkasan statistik.
      */
@@ -178,5 +183,28 @@ class SmkiByodController extends Controller
         $form->delete();
 
         return response()->json(['success' => true, 'message' => 'Formulir penggunaan perangkat pribadi berhasil dihapus!']);
+    }
+
+    /**
+     * Unduh formulir FR-045 (.docx) dari template asli.
+     */
+    public function exportDocx($id)
+    {
+        try {
+            $form = SmkiByodForm::with('perangkat')->findOrFail($id);
+            $path = $this->docxService->generateDocx($form);
+            $name = 'FR-045_BYOD_' . preg_replace('/[^A-Za-z0-9]+/', '_', (string) $form->unit_kerja) . '_' . $form->id . '.docx';
+
+            return response()->download($path, $name, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ])->deleteFileAfterSend(true);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['success' => false, 'message' => 'Data formulir BYOD tidak ditemukan.'], 404);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mencetak dokumen. Silakan coba beberapa saat lagi. (' . $e->getMessage() . ')',
+            ], 500);
+        }
     }
 }
