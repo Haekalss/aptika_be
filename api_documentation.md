@@ -335,6 +335,53 @@ Standar formulir FR-045/KOM.03/05/SANDIKAMI (Rev 0.0, berlaku 13 Juli 2023) beru
 
 ---
 
+## 13. SMKI - Formulir Laporan Evaluasi dan Pengujian DRP (FR-039)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/evaluasi-drp` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-039/KOM.03.05/SANDIKAMI (Rev 0.0, berlaku 2022) untuk melaporkan evaluasi pengujian Disaster Recovery Plan: (A) data pengujian, tabel Evaluasi - Persyaratan Waktu (RTO), Evaluasi - Proses DRP, Evaluasi - Team; (B) Check List Pengujian BCP (10 kriteria); blok tanda tangan Dibuat / Diperiksa / Disetujui Oleh; serta lampiran laporan pengujian.
+
+### Endpoints
+- `GET /api/smki/evaluasi-drp` : Daftar laporan dengan paginasi + ringkasan KPI (`total_evaluasi`, `evaluasi_bulan_ini`, `total_sistem`, `total_rekomendasi`). Tiap baris memuat `total_sistem`, `total_proses`, `total_tim`.
+  - Query parameters: `search` (tujuan, cakupan, tipe, asumsi bencana, sistem TI, proses, PIC, peran), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/evaluasi-drp` : Menyimpan laporan baru beserta array `waktu`, `proses`, `tim`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_pengujian": "2026-10-17",
+      "waktu_mulai": "09:00",
+      "waktu_selesai": "12:30",
+      "tujuan": "Menguji pemulihan sistem SIMPEG",
+      "cakupan": "Server aplikasi dan basis data",
+      "tipe_pengujian": "Simulasi (tabletop)",
+      "asumsi_bencana": "Pusat data utama tidak dapat diakses",
+      "asumsi_sumber_daya": "Seluruh tim hadir",
+      "checklist": { "kelengkapan_1": true, "kejelasan_2": true, "eksekusi_4": false },
+      "lampiran": "1. Log failover\n2. Foto dokumentasi",
+      "dibuat_oleh_nama": "Budi Santoso", "dibuat_oleh_tanggal": "2026-10-17",
+      "diperiksa_oleh_nama": "Siti Aminah", "diperiksa_oleh_tanggal": "2026-10-18",
+      "disetujui_oleh_nama": "Kepala Bidang", "disetujui_oleh_tanggal": "2026-10-19",
+      "waktu": [
+        { "sistem_ti": "SIMPEG", "rto_ideal": "4 jam", "pencapaian_rto": "5 jam", "kendala": "Restore database lambat" }
+      ],
+      "proses": [
+        { "proses": "Failover server", "aktivitas": "Aktifkan server DRC", "hasil_evaluasi": "Lambat", "rekomendasi": "Otomatisasi skrip", "pic": "Tim Infra" }
+      ],
+      "tim": [
+        { "peran": "Koordinator DRP", "tanggung_jawab": "Memimpin pengujian", "evaluasi": "Baik", "rekomendasi": "Pelatihan" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_pengujian`, `tujuan`, `cakupan`, `tipe_pengujian`; tiap baris `waktu` wajib `sistem_ti`, `proses` wajib `proses`, `tim` wajib `peran`. Lainnya opsional.
+  - `checklist` memakai kunci tetap: `kelengkapan_1..3`, `kejelasan_1..3`, `eksekusi_1..4` (nilai `true/false`); kunci lain diabaikan.
+- `GET /api/smki/evaluasi-drp/{id}` : Detail laporan beserta `waktu`, `proses`, `tim`, dan daftar `checklist_kriteria` (kunci, kategori, teks kriteria).
+- `PUT /api/smki/evaluasi-drp/{id}` : Memperbarui laporan dan menyinkronkan ulang `waktu`, `proses`, `tim`.
+- `DELETE /api/smki/evaluasi-drp/{id}` : Menghapus laporan (soft-delete, rincian ikut terhapus).
+- `GET /api/smki/evaluasi-drp/{id}/export-docx` : Unduh formulir FR-039 (.docx, A4 potret) hasil pengisian template asli `resources/templates/FR-039 Formulir Evaluasi Pengujian DRP.docx`. Bagian Check List BCP dicetak sama seperti template asli.
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 

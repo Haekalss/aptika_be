@@ -1493,6 +1493,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.perangkat-pribadi.destroy',
                 ]);
 
+            // Formulir Laporan Evaluasi dan Pengujian DRP (FR-039)
+            Route::get('evaluasi-drp/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class, 'exportDocx'])
+                ->name('smki.evaluasi-drp.export-docx');
+            Route::apiResource('evaluasi-drp', \App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class)
+                ->names([
+                    'index'   => 'smki.evaluasi-drp.index',
+                    'store'   => 'smki.evaluasi-drp.store',
+                    'show'    => 'smki.evaluasi-drp.show',
+                    'update'  => 'smki.evaluasi-drp.update',
+                    'destroy' => 'smki.evaluasi-drp.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
