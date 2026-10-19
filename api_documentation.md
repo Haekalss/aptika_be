@@ -263,6 +263,159 @@ Standar formulir FR014-SMKI untuk pencatatan resmi pemusnahan media penyimpanan,
 
 ---
 
+## 10. SMKI - Formulir Review Log (FR-040)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/review-log` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-040/KOM.03.05/SANDIKAMI (Rev 1.0, berlaku 07-Jul-2022) untuk pencatatan hasil review log akses/aktivitas sistem: identitas review, tabel log (User, IP, Tanggal, Waktu, Durasi), tindak lanjut, dan blok tanda tangan (Dibuat Oleh / Mengetahui).
+
+### Endpoints
+- `GET /api/smki/review-log` : Daftar review log dengan paginasi + ringkasan KPI (`total_review`, `total_log`, `review_bulan_ini`, `ada_tindak_lanjut`).
+  - Query parameters: `search` (obyek, pelaksana, tindak lanjut, user/IP pada log), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/review-log` : Menyimpan formulir baru beserta array rincian log (`items`).
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_review": "2026-10-01",
+      "periode_mulai": "2026-09-01",
+      "periode_selesai": "2026-09-30",
+      "obyek_review": "Server Aplikasi SIMPEG",
+      "pelaksana_review": "Tim Keamanan Informasi",
+      "tindak_lanjut": "Menonaktifkan akun yang tidak dikenal.",
+      "dibuat_oleh_nama": "Budi Santoso",
+      "dibuat_oleh_nip": "199001012015011001",
+      "mengetahui_nama": "Kepala Bidang",
+      "mengetahui_nip": "198001012010011001",
+      "ditandatangani_di": "Bandung",
+      "tanggal_ttd": "2026-10-02",
+      "items": [
+        { "user_log": "admin01", "ip_address": "10.10.1.5", "tanggal": "2026-09-10", "waktu": "08:15", "durasi": "45 menit" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_review`, `obyek_review`, `pelaksana_review`; tiap baris `items` wajib `user_log`, `ip_address`, `tanggal`, `waktu` (`HH:MM`), `durasi`.
+- `GET /api/smki/review-log/{id}` : Detail formulir beserta `items`.
+- `PUT /api/smki/review-log/{id}` : Memperbarui formulir dan menyinkronkan ulang `items`.
+- `DELETE /api/smki/review-log/{id}` : Menghapus formulir (soft-delete, rincian log ikut terhapus).
+- `GET /api/smki/review-log/{id}/export-docx` : Unduh formulir FR-040 (.docx) hasil pengisian template asli `resources/templates/FR-040 Formulir Review Log.docx`.
+
+---
+
+## 11. SMKI - Formulir BYOD / Penggunaan Perangkat Pribadi (FR-045)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/perangkat-pribadi` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-045/KOM.03/05/SANDIKAMI (Rev 0.0, berlaku 13 Juli 2023) berupa surat pernyataan Kepala Unit Kerja mengenai penggunaan perangkat pribadi (Bring Your Own Device) di lingkungan unit kerja, lengkap dengan daftar perangkat.
+
+### Endpoints
+- `GET /api/smki/perangkat-pribadi` : Daftar formulir dengan paginasi + ringkasan KPI (`total_formulir`, `total_perangkat`, `laptop`, `pc`, `tab`).
+  - Query parameters: `search` (nama, NIP, unit kerja, atau data perangkat), `jenis_perangkat` (`Laptop|PC|Tab`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/perangkat-pribadi` : Menyimpan formulir baru beserta array `perangkat`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "nama": "Budi Santoso",
+      "nip": "198001012010011001",
+      "jabatan": "Kepala Bidang Aptika",
+      "unit_kerja": "Bidang Aptika",
+      "ditandatangani_di": "Bandung",
+      "tanggal_ttd": "2026-10-17",
+      "perangkat": [
+        { "nama": "Dina Pratiwi", "nip": "199202022018021001", "jenis_perangkat": "Laptop", "merek_tipe": "Lenovo ThinkPad E14", "nomor_seri": "PF3ABC12" }
+      ]
+    }
+    ```
+  - Wajib: `nama`, `jabatan`, `unit_kerja`, minimal 1 `perangkat`; tiap perangkat wajib `nama`, `jenis_perangkat` (`Laptop`/`PC`/`Tab`), `merek_tipe`, `nomor_seri`.
+- `GET /api/smki/perangkat-pribadi/{id}` : Detail formulir beserta `perangkat`.
+- `PUT /api/smki/perangkat-pribadi/{id}` : Memperbarui formulir dan menyinkronkan ulang `perangkat`.
+- `DELETE /api/smki/perangkat-pribadi/{id}` : Menghapus formulir (soft-delete, rincian perangkat ikut terhapus).
+- `GET /api/smki/perangkat-pribadi/{id}/export-docx` : Unduh formulir FR-045 (.docx) hasil pengisian template asli `resources/templates/FR-045 Formulir BYOD.docx`.
+
+---
+
+## 12. SMKI - Formulir Reviu Monitoring dan Pemeliharaan CCTV (FR-038)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/reviu-cctv` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-038/KOM.03.05/SANDIKAMI (Rev 0.0, berlaku 07 Juli 2022) untuk mencatat hasil reviu monitoring dan pemeliharaan CCTV: identitas reviu (tanggal, periode, obyek, pelaksana), tabel uraian reviu (Uraian Reviu, Tindak Lanjut, Target Selesai, Keterangan), dan tanda tangan Pengelola CCTV.
+
+### Endpoints
+- `GET /api/smki/reviu-cctv` : Daftar reviu dengan paginasi + ringkasan KPI (`total_reviu`, `total_uraian`, `reviu_bulan_ini`, `tindak_lanjut_aktif` = uraian dengan target selesai belum lewat).
+  - Query parameters: `search` (obyek, pelaksana, pengelola, atau isi uraian/tindak lanjut/keterangan), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/reviu-cctv` : Menyimpan formulir baru beserta array `items`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_reviu": "2026-10-17",
+      "periode_mulai": "2026-09-01",
+      "periode_selesai": "2026-09-30",
+      "obyek_reviu": "CCTV Ruang Server Lantai 2",
+      "pelaksana_reviu": "Tim Keamanan Fisik",
+      "pengelola_nama": "Budi Santoso",
+      "pengelola_nip": "198001012010011001",
+      "items": [
+        { "uraian_reviu": "Kamera 3 tidak merekam malam hari", "tindak_lanjut": "Ganti kamera", "target_selesai": "2026-11-15", "keterangan": "Prioritas" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_reviu`, `obyek_reviu`, `pelaksana_reviu`, minimal 1 baris `items` dengan `uraian_reviu`. Lainnya opsional.
+- `GET /api/smki/reviu-cctv/{id}` : Detail formulir beserta `items`.
+- `PUT /api/smki/reviu-cctv/{id}` : Memperbarui formulir dan menyinkronkan ulang `items`.
+- `DELETE /api/smki/reviu-cctv/{id}` : Menghapus formulir (soft-delete, rincian ikut terhapus).
+- `GET /api/smki/reviu-cctv/{id}/export-docx` : Unduh formulir FR-038 (.docx, landscape seperti aslinya) hasil pengisian template asli `resources/templates/FR-038 Formulir Reviu CCTV.docx`.
+
+---
+
+## 13. SMKI - Formulir Laporan Evaluasi dan Pengujian DRP (FR-039)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/evaluasi-drp` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-039/KOM.03.05/SANDIKAMI (Rev 0.0, berlaku 2022) untuk melaporkan evaluasi pengujian Disaster Recovery Plan: (A) data pengujian, tabel Evaluasi - Persyaratan Waktu (RTO), Evaluasi - Proses DRP, Evaluasi - Team; (B) Check List Pengujian BCP (10 kriteria); blok tanda tangan Dibuat / Diperiksa / Disetujui Oleh; serta lampiran laporan pengujian.
+
+### Endpoints
+- `GET /api/smki/evaluasi-drp` : Daftar laporan dengan paginasi + ringkasan KPI (`total_evaluasi`, `evaluasi_bulan_ini`, `total_sistem`, `total_rekomendasi`). Tiap baris memuat `total_sistem`, `total_proses`, `total_tim`.
+  - Query parameters: `search` (tujuan, cakupan, tipe, asumsi bencana, sistem TI, proses, PIC, peran), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/evaluasi-drp` : Menyimpan laporan baru beserta array `waktu`, `proses`, `tim`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_pengujian": "2026-10-17",
+      "waktu_mulai": "09:00",
+      "waktu_selesai": "12:30",
+      "tujuan": "Menguji pemulihan sistem SIMPEG",
+      "cakupan": "Server aplikasi dan basis data",
+      "tipe_pengujian": "Simulasi (tabletop)",
+      "asumsi_bencana": "Pusat data utama tidak dapat diakses",
+      "asumsi_sumber_daya": "Seluruh tim hadir",
+      "checklist": { "kelengkapan_1": true, "kejelasan_2": true, "eksekusi_4": false },
+      "lampiran": "1. Log failover\n2. Foto dokumentasi",
+      "dibuat_oleh_nama": "Budi Santoso", "dibuat_oleh_tanggal": "2026-10-17",
+      "diperiksa_oleh_nama": "Siti Aminah", "diperiksa_oleh_tanggal": "2026-10-18",
+      "disetujui_oleh_nama": "Kepala Bidang", "disetujui_oleh_tanggal": "2026-10-19",
+      "waktu": [
+        { "sistem_ti": "SIMPEG", "rto_ideal": "4 jam", "pencapaian_rto": "5 jam", "kendala": "Restore database lambat" }
+      ],
+      "proses": [
+        { "proses": "Failover server", "aktivitas": "Aktifkan server DRC", "hasil_evaluasi": "Lambat", "rekomendasi": "Otomatisasi skrip", "pic": "Tim Infra" }
+      ],
+      "tim": [
+        { "peran": "Koordinator DRP", "tanggung_jawab": "Memimpin pengujian", "evaluasi": "Baik", "rekomendasi": "Pelatihan" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_pengujian`, `tujuan`, `cakupan`, `tipe_pengujian`; tiap baris `waktu` wajib `sistem_ti`, `proses` wajib `proses`, `tim` wajib `peran`. Lainnya opsional.
+  - `checklist` memakai kunci tetap: `kelengkapan_1..3`, `kejelasan_1..3`, `eksekusi_1..4` (nilai `true/false`); kunci lain diabaikan.
+- `GET /api/smki/evaluasi-drp/{id}` : Detail laporan beserta `waktu`, `proses`, `tim`, dan daftar `checklist_kriteria` (kunci, kategori, teks kriteria).
+- `PUT /api/smki/evaluasi-drp/{id}` : Memperbarui laporan dan menyinkronkan ulang `waktu`, `proses`, `tim`.
+- `DELETE /api/smki/evaluasi-drp/{id}` : Menghapus laporan (soft-delete, rincian ikut terhapus).
+- `GET /api/smki/evaluasi-drp/{id}/export-docx` : Unduh formulir FR-039 (.docx, A4 potret) hasil pengisian template asli `resources/templates/FR-039 Formulir Evaluasi Pengujian DRP.docx`. Bagian Check List BCP dicetak sama seperti template asli.
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 

@@ -80,9 +80,11 @@ Route::prefix('form-perubahan-it')->group(function () {
     Route::patch('/{id}/assign', [PermohonanTiController::class, 'assign']);
 });
 
-// ============================================================
+// =====================================================                ]);
+
 // PUBLIC MASTER DATA & SYSTEM HEALTH
-// ============================================================
+// =====================================================                ]);
+
 
 // Public Health Check & Database Status
 Route::get('/system/db-status', function () {
@@ -184,9 +186,11 @@ Route::get('/storage/{path}', [MagangController::class, 'serveFile'])
     ->where('path', '.*');
 
 
-// ============================================================
+// =====================================================                ]);
+
 // AUTHENTICATED API
-// ============================================================
+// =====================================================                ]);
+
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
@@ -287,9 +291,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::put('/password', [PasswordController::class, 'update']);
     Route::put('/profile/password', [PasswordController::class, 'update']);
 
-    // ========================================================
+    // =================================================                ]);
+
     // MASTER DATA (REFERENSI TABEL SISTEM)
-    // ========================================================
+    // =================================================                ]);
+
     Route::prefix('master')->name('master.')->group(function () {
         Route::apiResource('rekening', RekeningController::class);
         Route::apiResource('alat-angkutan', AlatAngkutanController::class);
@@ -297,9 +303,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::apiResource('nda', \App\Http\Controllers\MasterNdaController::class);
     });
 
-    // ========================================================
+    // =================================================                ]);
+
     // ADMIN PANEL
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['role:admin'])
         ->prefix('admin')
@@ -367,9 +375,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: ADMINISTRASI SURAT
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:ADMINISTRASI_SURAT'])
         ->group(function () {
@@ -518,9 +528,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: IKI REPORT
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:IKI_REPORT'])
         ->group(function () {
@@ -1177,9 +1189,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: MANAJEMEN TUGAS DIGITAL
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:MANAJEMEN_TUGAS'])
         ->group(function () {
@@ -1361,9 +1375,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: MAGANG
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:MAGANG'])
         ->group(function () {
@@ -1380,9 +1396,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: ADMINISTRASI SURAT - BAGIAN 2
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:ADMINISTRASI_SURAT'])
         ->group(function () {
@@ -1421,9 +1439,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             );
         });
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: SMKI - MANAJEMEN DAFTAR SOFTWARE STANDAR & ASET TI
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:SMKI'])
         ->prefix('smki')
@@ -1470,6 +1490,54 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.evaluasi-kepatuhan.show',
                     'update'  => 'smki.evaluasi-kepatuhan.update',
                     'destroy' => 'smki.evaluasi-kepatuhan.destroy',
+                ]);
+
+            // Formulir Review Log (FR-040)
+            Route::get('review-log/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviewLogController::class, 'exportDocx'])
+                ->name('smki.review-log.export-docx');
+            Route::apiResource('review-log', \App\Http\Controllers\Smki\SmkiReviewLogController::class)
+                ->names([
+                    'index'   => 'smki.review-log.index',
+                    'store'   => 'smki.review-log.store',
+                    'show'    => 'smki.review-log.show',
+                    'update'  => 'smki.review-log.update',
+                    'destroy' => 'smki.review-log.destroy',
+                ]);
+
+            // Formulir Bring Your Own Device / Penggunaan Perangkat Pribadi (FR-045)
+            Route::get('perangkat-pribadi/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiByodController::class, 'exportDocx'])
+                ->name('smki.perangkat-pribadi.export-docx');
+            Route::apiResource('perangkat-pribadi', \App\Http\Controllers\Smki\SmkiByodController::class)
+                ->names([
+                    'index'   => 'smki.perangkat-pribadi.index',
+                    'store'   => 'smki.perangkat-pribadi.store',
+                    'show'    => 'smki.perangkat-pribadi.show',
+                    'update'  => 'smki.perangkat-pribadi.update',
+                    'destroy' => 'smki.perangkat-pribadi.destroy',
+                ]);
+
+            // Formulir Reviu Monitoring dan Pemeliharaan CCTV (FR-038)
+            Route::get('reviu-cctv/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviuCctvController::class, 'exportDocx'])
+                ->name('smki.reviu-cctv.export-docx');
+            Route::apiResource('reviu-cctv', \App\Http\Controllers\Smki\SmkiReviuCctvController::class)
+                ->names([
+                    'index'   => 'smki.reviu-cctv.index',
+                    'store'   => 'smki.reviu-cctv.store',
+                    'show'    => 'smki.reviu-cctv.show',
+                    'update'  => 'smki.reviu-cctv.update',
+                    'destroy' => 'smki.reviu-cctv.destroy',
+                ]);
+
+            // Formulir Laporan Evaluasi dan Pengujian DRP (FR-039)
+            Route::get('evaluasi-drp/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class, 'exportDocx'])
+                ->name('smki.evaluasi-drp.export-docx');
+            Route::apiResource('evaluasi-drp', \App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class)
+                ->names([
+                    'index'   => 'smki.evaluasi-drp.index',
+                    'store'   => 'smki.evaluasi-drp.store',
+                    'show'    => 'smki.evaluasi-drp.show',
+                    'update'  => 'smki.evaluasi-drp.update',
+                    'destroy' => 'smki.evaluasi-drp.destroy',
                 ]);
 
             // Berita Acara Penghancuran Media (FR014-SMKI)
@@ -1589,10 +1657,12 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             // ==========================================
         });
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: INVENTARISASI DAFTAR ASET TI (BIDANG APTIKA)
     // Route standalone (tanpa prefix smki) - memiliki nama default apiResource
-    // ========================================================
+    // =================================================                ]);
+
     Route::get('daftar-aset-ti/lookup', [\App\Http\Controllers\DaftarAsetTiController::class, 'lookup'])
         ->name('daftar-aset-ti.lookup');
     Route::get('daftar-aset-ti/export-excel', [\App\Http\Controllers\DaftarAsetTiController::class, 'exportExcel'])
