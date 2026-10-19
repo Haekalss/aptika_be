@@ -1496,6 +1496,23 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.daftar-aset-ti.destroy',
                 ]);
 
+            Route::get('daftar-aset-sdm/lookup', [\App\Http\Controllers\Smki\SmkiAsetSdmController::class, 'lookup'])
+                ->name('smki.daftar-aset-sdm.lookup');
+            Route::apiResource('daftar-aset-sdm', \App\Http\Controllers\Smki\SmkiAsetSdmController::class)
+                ->names([
+                    'index'   => 'smki.daftar-aset-sdm.index',
+                    'store'   => 'smki.daftar-aset-sdm.store',
+                    'show'    => 'smki.daftar-aset-sdm.show',
+                    'update'  => 'smki.daftar-aset-sdm.update',
+                    'destroy' => 'smki.daftar-aset-sdm.destroy',
+                ]);
+
+            Route::get('perubahan-it/lookup', [\App\Http\Controllers\Smki\SmkiPerubahanItController::class, 'lookup']);
+            Route::get('perubahan-it/{id}/lampiran/{lampiranId}', [\App\Http\Controllers\Smki\SmkiPerubahanItController::class, 'unduhLampiran']);
+            Route::post('perubahan-it/{id}/aksi', [\App\Http\Controllers\Smki\SmkiPerubahanItController::class, 'aksi']);
+            Route::apiResource('perubahan-it', \App\Http\Controllers\Smki\SmkiPerubahanItController::class)
+                ->parameters(['perubahan-it' => 'id']);
+                
             // Formulir Hardening Pengecekan Aset (FR-047)
             Route::get('formulir-hardening/lookup', [\App\Http\Controllers\Smki\SmkiFormulirHardeningController::class, 'lookup'])
                 ->name('smki.formulir-hardening.lookup');
