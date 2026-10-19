@@ -143,29 +143,6 @@ class SmkiByodDocxService
         }
     }
 
-    private function fitTablesToWidth($xp, int $target, string $query = '//w:tbl'): void
-    {
-        foreach ($xp->query($query) as $tbl) {
-            $tblW = $xp->query('w:tblPr/w:tblW', $tbl)->item(0);
-            $cur = $tblW ? (int) $tblW->getAttributeNS(self::W_NS, 'w') : 0;
-            if ($cur <= 0) {
-                continue;
-            }
-            $f = $target / $cur;
-            $tblW->setAttributeNS(self::W_NS, 'w:w', (string) $target);
-            $ind = $xp->query('w:tblPr/w:tblInd', $tbl)->item(0);
-            if ($ind) {
-                $ind->setAttributeNS(self::W_NS, 'w:w', '0');
-            }
-            foreach ($xp->query('w:tblGrid/w:gridCol', $tbl) as $g) {
-                $g->setAttributeNS(self::W_NS, 'w:w', (string) max(1, (int) round(((int) $g->getAttributeNS(self::W_NS, 'w')) * $f)));
-            }
-            foreach ($xp->query('w:tr/w:tc/w:tcPr/w:tcW', $tbl) as $w) {
-                $w->setAttributeNS(self::W_NS, 'w:w', (string) max(1, (int) round(((int) $w->getAttributeNS(self::W_NS, 'w')) * $f)));
-            }
-        }
-    }
-
     private function fillIdentity($dom, $xp, $table, SmkiByodForm $form): void
     {
         $rows = $xp->query('w:tr', $table);
