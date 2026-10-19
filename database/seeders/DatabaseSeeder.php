@@ -61,5 +61,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SmkiLaporanAuditSeeder::class,
         ]);
+
+        if (app()->environment('local', 'testing')) {
+            $this->call(SmkiTindakanPerbaikanSeeder::class);
+        }
     }
 }
