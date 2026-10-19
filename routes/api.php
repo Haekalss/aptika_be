@@ -1570,6 +1570,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.laporan-kerusakan.destroy',
                 ]);
         });
+
+    // ========================================================
+    // LAYANAN: INVENTARISASI DAFTAR ASET TI (BIDANG APTIKA)
+    // Route standalone (tanpa prefix smki) - memiliki nama default apiResource
+    // ========================================================
+    Route::get('daftar-aset-ti/lookup', [\App\Http\Controllers\DaftarAsetTiController::class, 'lookup'])
+        ->name('daftar-aset-ti.lookup');
+    Route::get('daftar-aset-ti/export-excel', [\App\Http\Controllers\DaftarAsetTiController::class, 'exportExcel'])
+        ->name('daftar-aset-ti.export-excel');
+    Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
 });
 
 
