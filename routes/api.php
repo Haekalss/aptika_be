@@ -62,6 +62,9 @@ use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\ActiveSessionController;
 use App\Http\Controllers\Admin\AdminStatsController;
 
+// TAMBAHAN BARU: Import Controller Aset Sistem Informasi
+use App\Http\Controllers\Api\AsetSistemInformasiController;
+
 // Route::post('/register', [RegisteredUserController::class, 'store']);
 // Dinonaktifkan karena registrasi publik tidak diperbolehkan.
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
@@ -1476,6 +1479,21 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'update'  => 'smki.formulir-hardening.update',
                     'destroy' => 'smki.formulir-hardening.destroy',
                 ]);
+
+            // ==========================================
+            // ASET SISTEM INFORMASI (FR-036)
+            // ==========================================
+            Route::get('aset-sistem-informasi', [AsetSistemInformasiController::class, 'index'])
+                ->name('smki.aset-sistem-informasi.index');
+            Route::post('aset-sistem-informasi', [AsetSistemInformasiController::class, 'store'])
+                ->name('smki.aset-sistem-informasi.store');
+            Route::get('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'show'])
+                ->name('smki.aset-sistem-informasi.show');
+            Route::put('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'update'])
+                ->name('smki.aset-sistem-informasi.update');
+            Route::delete('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'destroy'])
+                ->name('smki.aset-sistem-informasi.destroy');
+            // ==========================================
         });
 
     // ========================================================
@@ -1488,5 +1506,3 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         ->name('daftar-aset-ti.export-excel');
     Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
 });
-
-
