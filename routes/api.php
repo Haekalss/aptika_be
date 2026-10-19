@@ -1549,17 +1549,28 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'update'  => 'smki.hak-akses-ti.update',
                     'destroy' => 'smki.hak-akses-ti.destroy',
                 ]);
-        });
 
-    // ========================================================
-    // LAYANAN: INVENTARISASI DAFTAR ASET TI (BIDANG APTIKA)
-    // Route standalone (tanpa prefix smki) - memiliki nama default apiResource
-    // ========================================================
-    Route::get('daftar-aset-ti/lookup', [\App\Http\Controllers\DaftarAsetTiController::class, 'lookup'])
-        ->name('daftar-aset-ti.lookup');
-    Route::get('daftar-aset-ti/export-excel', [\App\Http\Controllers\DaftarAsetTiController::class, 'exportExcel'])
-        ->name('daftar-aset-ti.export-excel');
-    Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
+            // Laporan Kerusakan Data Center (Sub-Modul SMKI)
+            Route::get('laporan-kerusakan/lookup', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'lookup'])
+                ->name('smki.laporan-kerusakan.lookup');
+            Route::get('laporan-kerusakan/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'exportBatchDocx'])
+                ->name('smki.laporan-kerusakan.export-batch-docx');
+            Route::get('laporan-kerusakan/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'exportDocx'])
+                ->name('smki.laporan-kerusakan.export-docx');
+            Route::patch('laporan-kerusakan/{id}/assign', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'assign'])
+                ->name('smki.laporan-kerusakan.assign');
+            Route::patch('laporan-kerusakan/{id}/validate', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'validateReport'])
+                ->name('smki.laporan-kerusakan.validate');
+            Route::apiResource('laporan-kerusakan', \App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class)
+                ->names([
+                    'index'   => 'smki.laporan-kerusakan.index',
+                    'store'   => 'smki.laporan-kerusakan.store',
+                    'show'    => 'smki.laporan-kerusakan.show',
+                    'update'  => 'smki.laporan-kerusakan.update',
+                    'destroy' => 'smki.laporan-kerusakan.destroy',
+                ]);
+        });
 });
+
 
 
