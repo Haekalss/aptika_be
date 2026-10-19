@@ -335,6 +335,40 @@ Standar formulir FR-045/KOM.03/05/SANDIKAMI (Rev 0.0, berlaku 13 Juli 2023) beru
 
 ---
 
+## 12. SMKI - Formulir Reviu Monitoring dan Pemeliharaan CCTV (FR-038)
+**[Membutuhkan Bearer Token]**
+
+Prefix: `/api/smki/reviu-cctv` (middleware `service.enabled:SMKI`, data diisolasi per bidang)
+
+Standar formulir FR-038/KOM.03.05/SANDIKAMI (Rev 0.0, berlaku 07 Juli 2022) untuk mencatat hasil reviu monitoring dan pemeliharaan CCTV: identitas reviu (tanggal, periode, obyek, pelaksana), tabel uraian reviu (Uraian Reviu, Tindak Lanjut, Target Selesai, Keterangan), dan tanda tangan Pengelola CCTV.
+
+### Endpoints
+- `GET /api/smki/reviu-cctv` : Daftar reviu dengan paginasi + ringkasan KPI (`total_reviu`, `total_uraian`, `reviu_bulan_ini`, `tindak_lanjut_aktif` = uraian dengan target selesai belum lewat).
+  - Query parameters: `search` (obyek, pelaksana, pengelola, atau isi uraian/tindak lanjut/keterangan), `tanggal_dari`, `tanggal_sampai` (`YYYY-MM-DD`), `page`, `per_page` (default 10, `-1` = semua).
+- `POST /api/smki/reviu-cctv` : Menyimpan formulir baru beserta array `items`.
+  - **Body (JSON)**:
+    ```json
+    {
+      "tanggal_reviu": "2026-10-17",
+      "periode_mulai": "2026-09-01",
+      "periode_selesai": "2026-09-30",
+      "obyek_reviu": "CCTV Ruang Server Lantai 2",
+      "pelaksana_reviu": "Tim Keamanan Fisik",
+      "pengelola_nama": "Budi Santoso",
+      "pengelola_nip": "198001012010011001",
+      "items": [
+        { "uraian_reviu": "Kamera 3 tidak merekam malam hari", "tindak_lanjut": "Ganti kamera", "target_selesai": "2026-11-15", "keterangan": "Prioritas" }
+      ]
+    }
+    ```
+  - Wajib: `tanggal_reviu`, `obyek_reviu`, `pelaksana_reviu`, minimal 1 baris `items` dengan `uraian_reviu`. Lainnya opsional.
+- `GET /api/smki/reviu-cctv/{id}` : Detail formulir beserta `items`.
+- `PUT /api/smki/reviu-cctv/{id}` : Memperbarui formulir dan menyinkronkan ulang `items`.
+- `DELETE /api/smki/reviu-cctv/{id}` : Menghapus formulir (soft-delete, rincian ikut terhapus).
+- `GET /api/smki/reviu-cctv/{id}/export-docx` : Unduh formulir FR-038 (.docx, landscape seperti aslinya) hasil pengisian template asli `resources/templates/FR-038 Formulir Reviu CCTV.docx`.
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 

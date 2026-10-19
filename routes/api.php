@@ -1493,6 +1493,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.perangkat-pribadi.destroy',
                 ]);
 
+            // Formulir Reviu Monitoring dan Pemeliharaan CCTV (FR-038)
+            Route::get('reviu-cctv/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviuCctvController::class, 'exportDocx'])
+                ->name('smki.reviu-cctv.export-docx');
+            Route::apiResource('reviu-cctv', \App\Http\Controllers\Smki\SmkiReviuCctvController::class)
+                ->names([
+                    'index'   => 'smki.reviu-cctv.index',
+                    'store'   => 'smki.reviu-cctv.store',
+                    'show'    => 'smki.reviu-cctv.show',
+                    'update'  => 'smki.reviu-cctv.update',
+                    'destroy' => 'smki.reviu-cctv.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
