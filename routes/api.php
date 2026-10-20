@@ -1621,6 +1621,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.hak-akses-ti.destroy',
                 ]);
 
+                // Formulir Notulen Management Review SMKI (FR-011)
+            Route::get('notulen/lookup', [\App\Http\Controllers\Smki\SmkiNotulenController::class, 'lookup'])
+                ->name('smki.notulen.lookup');
+            Route::get('notulen/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiNotulenController::class, 'exportDocx'])
+                ->name('smki.notulen.export-docx');
+            Route::apiResource('notulen', \App\Http\Controllers\Smki\SmkiNotulenController::class)
+                ->names([
+                    'index'   => 'smki.notulen.index',
+                    'store'   => 'smki.notulen.store',
+                    'show'    => 'smki.notulen.show',
+                    'update'  => 'smki.notulen.update',
+                    'destroy' => 'smki.notulen.destroy',
+                ]);
+
             // Laporan Kerusakan Data Center (Sub-Modul SMKI)
             Route::get('laporan-kerusakan/lookup', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'lookup'])
                 ->name('smki.laporan-kerusakan.lookup');
