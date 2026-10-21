@@ -23,13 +23,13 @@ class SmkiLogPerubahanController extends Controller
     private const FIELDS = [
         'title', 'startedAt', 'endedAt', 'before', 'action', 'after', 'testing',
         'outcome', 'obstacles', 'followUp', 'recovery', 'needsFollowUp', 'attachments',
+        'documentNumber', 'documentRevision', 'documentEffectiveDate',
     ];
 
-    // BelongsToBidang scopes regular users/admins to their bidang and lets
-    // Admin Aptika manage all bidang, following the existing backend policy.
+    // FR-032 is shared across bidang; other modules retain their existing scope.
     private function scoped(Request $request): Builder
     {
-        return SmkiLogPerubahan::query();
+        return SmkiLogPerubahan::withoutGlobalScope('bidang_scope');
     }
 
     private function findScoped(Request $request, string $id): SmkiLogPerubahan
@@ -54,7 +54,7 @@ class SmkiLogPerubahanController extends Controller
         $bidang = $this->resolveBidang($request, (int) ($request->input('bidang_id') ?? $request->user()->bidang_id));
         $objects = MasterSistemAplikasi::orderBy('nama_sistem')->get()->map(fn ($item) => [
             'id' => $item->getKey(), 'kind' => 'sistem', 'name' => $item->nama_sistem, 'label' => $item->nama_sistem,
-        ])->concat(DaftarAsetTi::where('bidang_id', $bidang->id)->orderBy('nama_aset')->get()->map(fn ($item) => [
+        ])->concat(DaftarAsetTi::withoutGlobalScope('bidang_scope')->where('bidang_id', $bidang->id)->orderBy('nama_aset')->get()->map(fn ($item) => [
             'id' => $item->id, 'kind' => 'aset', 'name' => $item->nama_aset,
             'label' => implode(' · ', array_filter([$item->kode, $item->nama_aset])),
         ]));
@@ -64,9 +64,8 @@ class SmkiLogPerubahanController extends Controller
                 'id' => $item->id, 'name' => $item->nama, 'position' => $item->jabatan,
             ]),
             'objects' => $objects->values(),
-            'canAccessAllBidang' => $request->user()->isAdminAptika(),
-            'bidangs' => $request->user()->isAdminAptika()
-                ? Bidang::orderBy('name')->get(['id', 'name']) : [['id' => $bidang->id, 'name' => $bidang->name]],
+            'canAccessAllBidang' => true,
+            'bidangs' => Bidang::orderBy('name')->get(['id', 'name']),
         ]]);
     }
 
@@ -158,6 +157,9 @@ class SmkiLogPerubahanController extends Controller
     private function validateInput(array $input): array
     {
         $rules = [
+            'documentNumber' => ['nullable', 'string', 'max:255'],
+            'documentRevision' => ['nullable', 'string', 'max:255'],
+            'documentEffectiveDate' => ['nullable', 'date_format:Y-m-d'],
             'title' => ['required', 'string', 'max:255'],
             'startedAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
             'endedAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
@@ -233,9 +235,6 @@ class SmkiLogPerubahanController extends Controller
 
     private function resolveBidang(Request $request, int $id): Bidang
     {
-        if (!$request->user()->isAdminAptika() && $id !== (int) $request->user()->bidang_id) {
-            abort(403, 'Anda hanya dapat mengelola log dalam bidang sendiri.');
-        }
         return Bidang::findOrFail($id);
     }
 
@@ -244,7 +243,7 @@ class SmkiLogPerubahanController extends Controller
         if ($references['objectKind'] === 'sistem') {
             $name = MasterSistemAplikasi::whereKey($references['objectId'])->value('nama_sistem');
         } else {
-            $asset = DaftarAsetTi::query()->where('bidang_id', $bidangId)
+            $asset = DaftarAsetTi::withoutGlobalScope('bidang_scope')->where('bidang_id', $bidangId)
                 ->whereKey($references['objectId'])->first();
             $name = $asset ? implode(' · ', array_filter([$asset->kode, $asset->nama_aset])) : null;
         }

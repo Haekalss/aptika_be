@@ -39,7 +39,7 @@ class LogPerubahanAccessTest extends TestCase
         ]];
     }
 
-    public function test_users_and_admins_share_drafts_only_within_their_bidang(): void
+    public function test_users_and_admins_share_drafts_across_bidang(): void
     {
         $aptika = Bidang::where('code', 'APTIKA')->firstOrFail();
         $ikp = Bidang::where('code', 'IKP')->firstOrFail();
@@ -69,17 +69,23 @@ class LogPerubahanAccessTest extends TestCase
             ->assertJsonPath('data.title', 'Diperbarui rekan');
 
         $this->actingAs($outsider, 'sanctum');
-        $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson("/api/smki/log-perubahan/{$id}")->assertNotFound();
-        $this->putJson("/api/smki/log-perubahan/{$id}", ['title' => 'Terlarang'])->assertNotFound();
-        $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertNotFound();
-        $this->deleteJson("/api/smki/log-perubahan/{$id}")->assertNotFound();
+        $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson("/api/smki/log-perubahan/{$id}")->assertOk();
+        $this->putJson("/api/smki/log-perubahan/{$id}", [
+            'title' => 'Diedit lintas bidang',
+            'documentNumber' => 'FR-032/UJI', 'documentRevision' => '2.1', 'documentEffectiveDate' => '2026-10-21',
+            'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey()],
+        ])->assertOk()->assertJsonPath('data.documentNumber', 'FR-032/UJI')
+            ->assertJsonPath('data.documentRevision', '2.1')->assertJsonPath('data.documentEffectiveDate', '2026-10-21')
+            ->assertJsonPath('data.references.recorderId', $writer->id)
+            ->assertJsonPath('data.references.bidangId', $aptika->id);
+        $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertUnprocessable();
         $otherId = $this->postJson('/api/smki/log-perubahan', [
             'title' => 'Log IKP',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertCreated()->json('data.id');
 
-        $this->actingAs($admin, 'sanctum');
+        $this->actingAs($colleague, 'sanctum');
         $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(2, 'data');
         $this->getJson("/api/smki/log-perubahan/{$otherId}")->assertOk();
         $this->putJson("/api/smki/log-perubahan/{$otherId}", [
@@ -91,7 +97,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->deleteJson("/api/smki/log-perubahan/{$otherId}")->assertOk();
     }
 
-    public function test_only_admin_aptika_can_select_another_bidang(): void
+    public function test_all_roles_can_select_bidang_but_assets_must_match_log_bidang(): void
     {
         $aptika = Bidang::where('code', 'APTIKA')->firstOrFail();
         $ikp = Bidang::where('code', 'IKP')->firstOrFail();
@@ -100,15 +106,15 @@ class LogPerubahanAccessTest extends TestCase
         foreach (['admin', 'user'] as $role) {
             $ordinary = User::factory()->create(['bidang_id' => $ikp->id, 'role' => $role, 'is_active' => 1]);
             $this->actingAs($ordinary, 'sanctum');
-            $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$aptika->id)->assertForbidden();
+            $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$aptika->id)->assertOk();
             $this->postJson('/api/smki/log-perubahan', [
                 'title' => 'Bidang terlarang',
                 'references' => ['bidangId' => $aptika->id, 'objectKind' => 'sistem', 'objectId' => $system->getKey()],
-            ])->assertForbidden();
+            ])->assertCreated();
         }
         $staff = User::factory()->create(['bidang_id' => $aptika->id, 'role' => 'user', 'is_active' => 1]);
         $this->actingAs($staff, 'sanctum');
-        $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$ikp->id)->assertForbidden();
+        $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$ikp->id)->assertOk();
         $this->postJson('/api/smki/log-perubahan', [
             'title' => 'Aset bidang lain',
             'references' => ['bidangId' => $aptika->id, 'objectKind' => 'aset', 'objectId' => $asset->id],
@@ -123,7 +129,7 @@ class LogPerubahanAccessTest extends TestCase
             'references' => ['bidangId' => $ikp->id, 'objectKind' => 'aset', 'objectId' => $asset->id],
         ])->assertCreated()->assertJsonPath('data.references.bidangId', $ikp->id);
         $this->actingAs($staff, 'sanctum');
-        $this->getJson('/api/smki/log-perubahan/'.$created->json('data.id'))->assertNotFound();
+        $this->getJson('/api/smki/log-perubahan/'.$created->json('data.id'))->assertOk();
     }
 
     public function test_final_log_is_locked_and_requires_a_master_employee(): void
@@ -150,6 +156,9 @@ class LogPerubahanAccessTest extends TestCase
             'outcome' => 'Berhasil',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => $employee->id],
         ])->assertOk();
+        $otherBidang = Bidang::where('code', 'IKP')->firstOrFail();
+        $otherUser = User::factory()->create(['bidang_id' => $otherBidang->id, 'role' => 'user', 'is_active' => 1]);
+        $this->actingAs($otherUser, 'sanctum');
         $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertOk()
             ->assertJsonPath('data.status', 'Final');
         $this->putJson("/api/smki/log-perubahan/{$id}", ['title' => 'Ubah lagi'])->assertStatus(409);
