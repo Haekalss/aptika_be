@@ -303,6 +303,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::apiResource('nda', \App\Http\Controllers\MasterNdaController::class);
     });
 
+    // =================================================
+    // SPESIMEN TTE (TANDA TANGAN ELEKTRONIK)
+    // =================================================
+    Route::prefix('tte')->name('tte.')->group(function () {
+        Route::get('pegawai', [\App\Http\Controllers\Api\TteSpecimenController::class, 'pegawai'])->name('pegawai');
+        Route::get('data/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'data'])->name('data');
+        Route::get('spesimen/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'show'])->name('spesimen');
+    });
+
     // =================================================                ]);
 
     // ADMIN PANEL
