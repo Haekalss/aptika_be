@@ -314,6 +314,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         // Resolver: cari spesimen dari NIP/nama (master dulu, lalu pegawai)
         Route::get('resolve', [\App\Http\Controllers\Api\TteResolverController::class, 'resolve'])->name('resolve');
         Route::get('resolve/image', [\App\Http\Controllers\Api\TteResolverController::class, 'image'])->name('resolve.image');
+        Route::get('options', [\App\Http\Controllers\Api\TteResolverController::class, 'options'])->name('options');
 
         // Master spesimen TTE (CRUD)
         Route::post('master/preview', [\App\Http\Controllers\Api\TteSpesimenController::class, 'preview'])->name('master.preview');

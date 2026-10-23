@@ -241,4 +241,114 @@ trait FillsDocxTemplate
             }
         }
     }
+
+    /**
+     * Sisipkan gambar (PNG) ke dalam paragraf .docx.
+     *
+     * Menambahkan file gambar ke word/media/, mendaftarkannya di
+     * word/_rels/document.xml.rels, lalu menyisipkan elemen <w:drawing>
+     * berisi gambar inline ke paragraf tujuan.
+     *
+     * @param  string      $imagePath  Path absolut file PNG
+     * @param  DOMDocument $dom        Dokumen word/document.xml
+     * @param  DOMNode     $paragraph  Paragraf <w:p> tempat gambar disisipkan
+     * @param  int         $widthPx    Lebar tampilan (piksel @96dpi)
+     * @return bool true bila berhasil
+     */
+    private function insertImageIntoParagraph(
+        \ZipArchive $zip,
+        DOMDocument $dom,
+        DOMXPath $xp,
+        DOMNode $paragraph,
+        string $imagePath,
+        int $widthPx = 300
+    ): bool {
+        if (!is_file($imagePath)) {
+            return false;
+        }
+
+        $binary = file_get_contents($imagePath);
+        if ($binary === false || $binary === '') {
+            return false;
+        }
+
+        $size = @getimagesize($imagePath);
+        if (!$size || $size[0] <= 0) {
+            return false;
+        }
+
+        // Simpan gambar ke dalam paket docx
+        static $seq = 0;
+        $seq++;
+        $mediaName = 'tte_' . substr(sha1($binary), 0, 10) . '_' . $seq . '.png';
+        $zip->addFromString('word/media/' . $mediaName, $binary);
+
+        // Daftarkan relasi gambar
+        $relsXml = $zip->getFromName('word/_rels/document.xml.rels');
+        if ($relsXml === false || $relsXml === '') {
+            return false;
+        }
+
+        $existingIds = [];
+        if (preg_match_all('/Id="([^"]+)"/', $relsXml, $m)) {
+            $existingIds = $m[1];
+        }
+        $n = 1;
+        while (in_array('rIdTte' . $n, $existingIds, true)) {
+            $n++;
+        }
+        $relId = 'rIdTte' . $n;
+
+        $relXml = '<Relationship Id="' . $relId . '"'
+            . ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"'
+            . ' Target="media/' . $mediaName . '"/>';
+
+        if (strpos($relsXml, '</Relationships>') === false) {
+            return false;
+        }
+        $relsXml = str_replace('</Relationships>', $relXml . '</Relationships>', $relsXml);
+        $zip->addFromString('word/_rels/document.xml.rels', $relsXml);
+
+        // Rasio asli gambar
+        $cx = (int) round($widthPx * 9525);            // 1 px = 9525 EMU
+        $cy = (int) round(($widthPx * $size[1] / $size[0]) * 9525);
+
+        // Bangun run di dokumen sementara (namespace dideklarasikan di root),
+        // lalu impor ke dokumen target — cara ini andal untuk DOMDocument.
+        $tmp = new DOMDocument('1.0', 'UTF-8');
+        $wrapped = '<root xmlns:w="' . self::W_NS . '"'
+            . ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+            . ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+            . ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+            . ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+            . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
+            . '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+            . '<wp:docPr id="' . (1000 + $seq) . '" name="TTE ' . $seq . '"/>'
+            . '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            . '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            . '<pic:pic><pic:nvPicPr><pic:cNvPr id="' . (2000 + $seq) . '" name="tte.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+            . '<pic:blipFill><a:blip r:embed="' . $relId . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm>'
+            . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+            . '</pic:pic></a:graphicData></a:graphic>'
+            . '</wp:inline></w:drawing></w:r></root>';
+
+        if (!@$tmp->loadXML($wrapped)) {
+            return false;
+        }
+
+        $runNode = $tmp->documentElement->firstChild;
+        if (!$runNode) {
+            return false;
+        }
+
+        $imported = $dom->importNode($runNode, true);
+        if (!$imported) {
+            return false;
+        }
+        $paragraph->appendChild($imported);
+
+        return true;
+    }
 }

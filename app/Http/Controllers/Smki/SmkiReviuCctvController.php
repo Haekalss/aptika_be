@@ -192,7 +192,16 @@ class SmkiReviuCctvController extends Controller
     {
         try {
             $reviu = SmkiReviuCctv::with('items')->findOrFail($id);
-            $path = $this->docxService->generateDocx($reviu);
+
+            // Penanda tangan bisa dipilih dari UI (tanpa mengetik NIP)
+            $override = null;
+            $nama = trim((string) request()->query('nama', ''));
+            $nip = trim((string) request()->query('nip', ''));
+            if ($nama !== '' || $nip !== '') {
+                $override = ['nama' => $nama, 'nip' => $nip];
+            }
+
+            $path = $this->docxService->generateDocx($reviu, $override);
             $name = 'FR-038_Reviu_CCTV_' . preg_replace('/[^A-Za-z0-9]+/', '_', (string) $reviu->obyek_reviu) . '_' . $reviu->id . '.docx';
 
             return response()->download($path, $name, [

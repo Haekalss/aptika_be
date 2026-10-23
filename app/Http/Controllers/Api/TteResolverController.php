@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pegawai;
 use App\Models\TteSpesimen;
-use App\Services\TteSpecimenService;
+use App\Services\TteResolverService;
 use Illuminate\Http\Request;
 
 /**
@@ -20,7 +20,7 @@ use Illuminate\Http\Request;
  */
 class TteResolverController extends Controller
 {
-    public function __construct(private TteSpecimenService $tte)
+    public function __construct(private TteResolverService $resolver)
     {
     }
 
@@ -40,7 +40,7 @@ class TteResolverController extends Controller
             ], 422);
         }
 
-        $match = $this->findSpesimen($nip, $nama);
+        $match = $this->resolver->find($nip, $nama);
 
         if ($match === null) {
             return response()->json([
@@ -50,10 +50,19 @@ class TteResolverController extends Controller
             ], 200);
         }
 
+        $model = $match['model'];
+
         return response()->json([
             'success' => true,
             'message' => 'Spesimen ditemukan.',
-            'data' => $match,
+            'data' => [
+                'source' => $match['source'],
+                'id' => $model->id,
+                'nama' => $model->nama,
+                'nip' => $model->nip,
+                'jabatan' => $model->jabatan,
+                'unit' => $model->unit ?? null,
+            ],
         ], 200);
     }
 
@@ -66,33 +75,13 @@ class TteResolverController extends Controller
         $nip = trim((string) $request->query('nip', ''));
         $nama = trim((string) $request->query('nama', ''));
 
-        $match = $this->findSpesimen($nip, $nama);
-
-        if ($match === null) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Spesimen tidak ditemukan.',
-            ], 404);
-        }
-
-        $source = $match['source'] === 'master'
-            ? TteSpesimen::find($match['id'])
-            : Pegawai::find($match['id']);
-
-        if (!$source) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sumber data spesimen hilang.',
-            ], 404);
-        }
-
-        $path = $this->tte->generate($source, $match['unit'] ?? null);
+        $path = $this->resolver->imagePath($nip, $nama);
 
         if ($path === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat gambar spesimen.',
-            ], 500);
+                'message' => 'Spesimen tidak ditemukan.',
+            ], 404);
         }
 
         return response()->file($path, [
@@ -101,56 +90,57 @@ class TteResolverController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/tte/options
+     * Daftar pilihan penanda tangan untuk dropdown saat cetak/unduh.
+     * Master spesimen lebih dulu, lalu pegawai yang belum punya spesimen.
+     */
+    public function options()
+    {
+        $master = TteSpesimen::query()
+            ->where('is_active', true)
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'nip', 'jabatan', 'unit']);
+
+        $nipMaster = $master->pluck('nip')->filter()->all();
+
+        $pegawai = Pegawai::query()
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'nip', 'jabatan'])
+            ->reject(fn ($p) => $p->nip !== null && in_array($p->nip, $nipMaster, true))
+            ->values();
+
+        $items = $master->map(fn ($m) => [
+            'key' => 'master:' . $m->id,
+            'source' => 'master',
+            'id' => $m->id,
+            'nama' => $m->nama,
+            'nip' => $m->nip,
+            'jabatan' => $m->jabatan,
+            'unit' => $m->unit,
+            'label' => $m->nama . ($m->nip ? ' — ' . $m->nip : ''),
+        ])->concat($pegawai->map(fn ($p) => [
+            'key' => 'pegawai:' . $p->id,
+            'source' => 'pegawai',
+            'id' => $p->id,
+            'nama' => $p->nama,
+            'nip' => $p->nip,
+            'jabatan' => $p->jabatan,
+            'unit' => null,
+            'label' => $p->nama . ($p->nip ? ' — ' . $p->nip : ''),
+        ]))->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Daftar penanda tangan berhasil diambil.',
+            'data' => $items,
+        ], 200);
+    }
+
     /** Cari spesimen: master dulu, baru pegawai. */
     private function findSpesimen(string $nip, string $nama): ?array
     {
-        // 1) Master Spesimen TTE (aktif saja)
-        $master = TteSpesimen::query()
-            ->where('is_active', true)
-            ->when($nip !== '', fn ($q) => $q->where('nip', $nip))
-            ->when($nip === '' && $nama !== '', fn ($q) => $q->where('nama', 'like', "%{$nama}%"))
-            ->first();
-
-        // bila pencarian NIP gagal, coba nama
-        if (!$master && $nip !== '' && $nama !== '') {
-            $master = TteSpesimen::query()
-                ->where('is_active', true)
-                ->where('nama', 'like', "%{$nama}%")
-                ->first();
-        }
-
-        if ($master) {
-            return [
-                'source' => 'master',
-                'id' => $master->id,
-                'nama' => $master->nama,
-                'nip' => $master->nip,
-                'jabatan' => $master->jabatan,
-                'unit' => $master->unit,
-            ];
-        }
-
-        // 2) Fallback ke master pegawai
-        $pegawai = Pegawai::query()
-            ->when($nip !== '', fn ($q) => $q->where('nip', $nip))
-            ->when($nip === '' && $nama !== '', fn ($q) => $q->where('nama', 'like', "%{$nama}%"))
-            ->first();
-
-        if (!$pegawai && $nip !== '' && $nama !== '') {
-            $pegawai = Pegawai::query()->where('nama', 'like', "%{$nama}%")->first();
-        }
-
-        if ($pegawai) {
-            return [
-                'source' => 'pegawai',
-                'id' => $pegawai->id,
-                'nama' => $pegawai->nama,
-                'nip' => $pegawai->nip,
-                'jabatan' => $pegawai->jabatan,
-                'unit' => null,
-            ];
-        }
-
-        return null;
+        // Delegasi ke service agar konsisten dengan ekspor DOCX.
+        return $this->resolver->find($nip, $nama);
     }
 }

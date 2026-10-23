@@ -37,8 +37,11 @@ class SmkiReviuCctvDocxService
 
     /**
      * @return string Path file .docx sementara (hapus setelah dikirim)
+     *
+     * @param array|null $tteOverride  ['nama' => ..., 'nip' => ...] untuk menimpa
+     *                                 penanda tangan saat unduh (dipilih di UI).
      */
-    public function generateDocx(SmkiReviuCctv $reviu): string
+    public function generateDocx(SmkiReviuCctv $reviu, ?array $tteOverride = null): string
     {
         $tempDir = storage_path('app/temp');
         if (!is_dir($tempDir)) {
@@ -72,8 +75,11 @@ class SmkiReviuCctvDocxService
 
         $this->fillIdentity($dom, $xp, $rows, $reviu);
         $this->fillItems($dom, $xp, $table, $reviu);
-        $this->fillSignature($dom, $xp, $reviu);
-        $this->fitTablesToWidth($xp, $this->contentWidth($xp), '//w:body/w:tbl');
+        // Gambar disisipkan SEBELUM fillSignature, karena fillSignature sudah
+        // mengganti teks "(…)" menjadi "(Nama)" sehingga paragraf penanda hilang.
+        $this->fillTteImage($zip, $dom, $xp, $reviu, $tteOverride);
+        $this->fillSignature($dom, $xp, $reviu, $tteOverride);
+        $this->fitTablesToWidth($xp, $this->contentWidth($xp), '//w:body//w:tbl');
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -152,17 +158,17 @@ class SmkiReviuCctvDocxService
     }
 
     /** "(……………)" -> "(Nama)" dan baris "NIP. ..." di bawahnya. */
-    private function fillSignature($dom, $xp, SmkiReviuCctv $reviu): void
+    private function fillSignature($dom, $xp, SmkiReviuCctv $reviu, ?array $override = null): void
     {
         $this->keepSignatureTogether($dom, $xp);
 
-        $nama = trim((string) $reviu->pengelola_nama);
-        $nip = trim((string) $reviu->pengelola_nip);
+        $nama = trim((string) ($override['nama'] ?? $reviu->pengelola_nama));
+        $nip = trim((string) ($override['nip'] ?? $reviu->pengelola_nip));
         if ($nama === '' && $nip === '') {
             return;
         }
         foreach ($xp->query('//w:body/w:p') as $p) {
-            if (strpos($p->textContent, '(…') !== 0) {
+            if (strpos(trim($p->textContent), '(…') !== 0) {
                 continue;
             }
             if ($nama !== '') {
@@ -203,6 +209,50 @@ class SmkiReviuCctvDocxService
             if (!$xp->query('w:keepNext', $pPr)->length) {
                 $pPr->insertBefore($dom->createElementNS(self::W_NS, 'w:keepNext'), $pPr->firstChild);
             }
+        }
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE di antara "Pengelola CCTV," dan baris "(Nama)".
+     *
+     * Sumber gambar ditentukan lewat TteSpecimenService: master spesimen TTE dulu
+     * (dicocokkan NIP/nama), fallback ke master pegawai.
+     */
+    private function fillTteImage($zip, $dom, $xp, SmkiReviuCctv $reviu, ?array $override = null): void
+    {
+        $nip = trim((string) ($override['nip'] ?? $reviu->pengelola_nip));
+        $nama = trim((string) ($override['nama'] ?? $reviu->pengelola_nama));
+        if ($nip === '' && $nama === '') {
+            return;
+        }
+
+        $path = app(\App\Services\TteResolverService::class)->imagePath($nip, $nama);
+        if ($path === null) {
+            return;
+        }
+
+        // Paragraf "(Nama)" jadi titik sisip; gambar ditaruh tepat sebelum paragraf itu.
+        $target = null;
+        foreach ($xp->query('//w:body/w:p') as $p) {
+            if (strpos(trim($p->textContent), '(…') === 0) {
+                $target = $p;
+                break;
+            }
+        }
+        if (!$target) {
+            return;
+        }
+
+        $imgPara = $dom->createElementNS(self::W_NS, 'w:p');
+        $pPr = $dom->createElementNS(self::W_NS, 'w:pPr');
+        $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+        $spacing->setAttributeNS(self::W_NS, 'w:before', '120');
+        $spacing->setAttributeNS(self::W_NS, 'w:after', '60');
+        $pPr->appendChild($spacing);
+        $imgPara->appendChild($pPr);
+
+        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 260)) {
+            $target->parentNode->insertBefore($imgPara, $target);
         }
     }
 }
