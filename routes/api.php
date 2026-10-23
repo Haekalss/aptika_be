@@ -310,6 +310,17 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('pegawai', [\App\Http\Controllers\Api\TteSpecimenController::class, 'pegawai'])->name('pegawai');
         Route::get('data/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'data'])->name('data');
         Route::get('spesimen/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'show'])->name('spesimen');
+
+        // Master spesimen TTE (CRUD)
+        Route::post('master/preview', [\App\Http\Controllers\Api\TteSpesimenController::class, 'preview'])->name('master.preview');
+        Route::get('master/{id}/image', [\App\Http\Controllers\Api\TteSpesimenController::class, 'image'])->name('master.image');
+        Route::apiResource('master', \App\Http\Controllers\Api\TteSpesimenController::class)->names([
+            'index' => 'master.index',
+            'store' => 'master.store',
+            'show' => 'master.show',
+            'update' => 'master.update',
+            'destroy' => 'master.destroy',
+        ]);
     });
 
     // =================================================                ]);

@@ -105,22 +105,25 @@ class TteSpecimenService
         $nip = trim((string) $get('nip'));
         $jabatan = trim((string) $get('jabatan'));
         $pangkat = trim((string) $get('pangkat'));
+        $golongan = trim((string) $get('golongan'));
+        $kalimat = trim((string) $get('kalimat'));
 
         // "Pembina / IVa" -> "Pembina" + "IVa"
-        $golongan = '';
-        if (str_contains($pangkat, '/')) {
-            [$pangkatUtama, $golongan] = array_map('trim', explode('/', $pangkat, 2));
-        } else {
-            $pangkatUtama = $pangkat;
+        if ($golongan === '' && str_contains($pangkat, '/')) {
+            [$pangkat, $golongan] = array_map('trim', explode('/', $pangkat, 2));
+        } elseif ($golongan !== '' && str_contains($pangkat, '/')) {
+            // pangkat sudah dipisah di kolom sendiri; buang bagian golongan dari string pangkat
+            $pangkat = trim(explode('/', $pangkat, 2)[0]);
         }
 
         return [
             'nama' => $nama,
             'nip' => $nip,
             'jabatan' => $jabatan !== '' ? mb_strtoupper($jabatan) : 'KEPALA BIDANG APLIKASI INFORMATIKA',
-            'unit' => mb_strtoupper(trim((string) ($unit ?? 'DINAS KOMUNIKASI DAN INFORMATIKA'))),
-            'pangkat' => $pangkatUtama,
+            'unit' => mb_strtoupper(trim((string) ($unit ?? $get('unit', 'DINAS KOMUNIKASI DAN INFORMATIKA')))),
+            'pangkat' => $pangkat,
             'golongan' => $golongan,
+            'kalimat' => $kalimat !== '' ? $kalimat : 'Ditandatangani secara elektronik oleh:',
         ];
     }
 
@@ -175,7 +178,7 @@ class TteSpecimenService
         $y = $y1 + self::PAD_Y;
 
         $lines = [
-            ['text' => 'Ditandatangani secara elektronik oleh:', 'size' => 13, 'bold' => false, 'gap' => 44],
+            ['text' => $d['kalimat'], 'size' => 13, 'bold' => false, 'gap' => 44],
             ['text' => $d['jabatan'], 'size' => 15, 'bold' => true, 'gap' => 36],
             ['text' => $d['unit'] . ',', 'size' => 15, 'bold' => true, 'gap' => 78],
             ['text' => $d['nama'], 'size' => 17, 'bold' => true, 'gap' => 32],
