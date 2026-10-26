@@ -251,7 +251,7 @@ class SmkiReviuCctvDocxService
         $pPr->appendChild($spacing);
         $imgPara->appendChild($pPr);
 
-        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 200)) {
+        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 280)) {
             $target->parentNode->insertBefore($imgPara, $target);
         }
     }

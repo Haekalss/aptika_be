@@ -28,35 +28,46 @@ use GdImage;
 class TteSpecimenService
 {
     /** Versi tata letak — dinaikkan bila bentuk spesimen berubah (memaksa cache baru). */
-    private const LAYOUT_VERSION = 3;
+    private const LAYOUT_VERSION = 4;
 
-    /** Ukuran kanvas (px), 3x dari template agar tajam saat dicetak. */
-    private const WIDTH = 720;
+    /** Margin putih di luar bingkai luar (px). */
+    private const FRAME_PAD = 3;
 
-    /** Kotak TTE (tinggi dihitung otomatis mengikuti isi). */
-    private const BOX_X1 = 18;
-    private const BOX_Y1 = 58;
-    private const BOX_W = 684;
+    /** Bingkai luar persegi (bukan kotak rounded) — ukuran dari template 313x125 @1x. */
+    private const FRAME_X = 3;
+    private const FRAME_Y = 3;
+    private const FRAME_W = 939;
+    private const FRAME_H_MIN = 375;
 
-    private const RADIUS = 34;
-    private const PAD_X = 60;
+    /** Kotak rounded di dalam bingkai (template 285x114 @1x, inset 13/5). */
+    private const BOX_X1 = 42;
+    private const BOX_Y1 = 18;
+    private const BOX_W = 855;
+    private const BOX_H_MIN = 342;
+
+    private const RADIUS = 47;
+    /** Indentasi teks dari tepi kiri kotak (template: 92px @1x). */
+    private const PAD_X = 276;
+    /** Sisa ruang di kanan teks (template: 39px @1x). */
+    private const PAD_KANAN = 39;
 
     /** Baseline awal isi kotak (relatif terhadap tepi atas kotak). */
     private const FIRST_LINE_Y = 63;
     /** Jarak antar baris pembuka. */
     private const PITCH_KALIMAT = 39;
     /** Jarak baris pembuka ke jabatan. */
-    private const PITCH_KE_JABATAN = 45;
+    private const PITCH_KE_JABATAN = 39;
     /** Jarak antar baris jabatan (bila dibungkus). */
-    private const PITCH_JABATAN = 40;
-    /** Jarak jabatan terakhir ke nama. */
+    private const PITCH_JABATAN = 39;
+    /** Jarak jabatan terakhir ke nama (satu baris kosong). */
     private const JARAK_KE_NAMA = 108;
     /** Jarak nama ke NIP. */
-    private const JARAK_KE_NIP = 33;
+    private const JARAK_KE_NIP = 39;
     /** Ruang kosong di bawah NIP. */
     private const PAD_BAWAH = 54;
 
-    private const FONT_SIZE = 28;
+    /** Ukuran font (pt GD; em piksel ≈ 4/3 × nilai ini). */
+    private const FONT_SIZE = 24;
 
     private const COLOR_TEXT = [0, 0, 0];
     private const COLOR_BORDER = [0, 0, 0];
@@ -158,7 +169,7 @@ class TteSpecimenService
             return null;
         }
 
-        $availW = self::BOX_W - self::PAD_X * 2;
+        $availW = self::BOX_W - self::PAD_X - self::PAD_KANAN;
 
         // --- Susun baris lebih dulu (jabatan bisa terbungkus) ---
         $lines = [];
@@ -193,37 +204,43 @@ class TteSpecimenService
             $lines[] = ['text' => $d['nip'], 'y' => $nipY];
         }
 
-        $boxH = $nipY + self::PAD_BAWAH;
-        $canvasH = self::BOX_Y1 + $boxH + 18;
+        $boxH = max(self::BOX_H_MIN, $nipY + self::PAD_BAWAH);
+        // Bingkai luar: 15px ruang di atas kotak, 18px di bawahnya (rasio template).
+        $frameH = max(self::FRAME_H_MIN, $boxH + 33);
+        $canvasW = self::FRAME_X + self::FRAME_W + self::FRAME_PAD;
+        $canvasH = self::FRAME_Y + $frameH + self::FRAME_PAD;
 
         // --- Kanvas ---
-        $img = imagecreatetruecolor(self::WIDTH, $canvasH);
+        $img = imagecreatetruecolor($canvasW, $canvasH);
         if (!$img) {
             return null;
         }
 
-        imagesavealpha($img, true);
         $bg = imagecolorallocate($img, ...self::COLOR_BG);
         imagefill($img, 0, 0, $bg);
 
         $text = imagecolorallocate($img, ...self::COLOR_TEXT);
         $border = imagecolorallocate($img, ...self::COLOR_BORDER);
 
-        $x = self::BOX_X1 + self::PAD_X;
+        imagesetthickness($img, 3);
 
-        // --- Pangkat/golongan di ATAS kotak ---
-        if ($d['pangkat_line'] !== '') {
-            imagettftext($img, self::FONT_SIZE, 0, $x, 30, $text, $font, $d['pangkat_line']);
-        }
+        // --- Bingkai luar: persegi, sudut tajam ---
+        $fx1 = self::FRAME_X;
+        $fy1 = self::FRAME_Y;
+        $fx2 = $fx1 + self::FRAME_W;
+        $fy2 = $fy1 + $frameH;
 
-        // --- Kotak rounded ---
+        imageline($img, $fx1, $fy1, $fx2, $fy1, $border);
+        imageline($img, $fx1, $fy2, $fx2, $fy2, $border);
+        imageline($img, $fx1, $fy1, $fx1, $fy2, $border);
+        imageline($img, $fx2, $fy1, $fx2, $fy2, $border);
+
+        // --- Kotak rounded di dalam bingkai ---
         $x1 = self::BOX_X1;
         $y1 = self::BOX_Y1;
         $x2 = $x1 + self::BOX_W;
         $y2 = $y1 + $boxH;
         $r = self::RADIUS;
-
-        imagesetthickness($img, 3);
 
         imageline($img, $x1 + $r, $y1, $x2 - $r, $y1, $border);
         imageline($img, $x1 + $r, $y2, $x2 - $r, $y2, $border);
@@ -237,7 +254,8 @@ class TteSpecimenService
 
         imagesetthickness($img, 1);
 
-        // --- Isi kotak ---
+        // --- Isi kotak (rata kiri pada satu margin) ---
+        $x = $x1 + self::PAD_X;
         foreach ($lines as $line) {
             $value = trim((string) $line['text']);
             if ($value === '') {

@@ -244,14 +244,6 @@ class SmkiByodDocxService
     {
         $nip = trim((string) $form->nip);
         $nama = trim((string) $form->nama);
-        if ($nip === '' && $nama === '') {
-            return;
-        }
-
-        $path = app(TteResolverService::class)->imagePath($nip, $nama);
-        if ($path === null) {
-            return;
-        }
 
         $holders = [];
         foreach ($xp->query('//w:body/w:p') as $p) {
@@ -302,8 +294,11 @@ class SmkiByodDocxService
         }
 
         $imgPara = $this->tteImageParagraph($dom);
-        $inserted = $this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 190);
-        if ($inserted) {
+        $path = ($nip === '' && $nama === '')
+            ? null
+            : app(TteResolverService::class)->imagePath($nip, $nama);
+
+        if ($path !== null && $this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 300)) {
             $anchor->parentNode->insertBefore($imgPara, $anchor);
         }
 

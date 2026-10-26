@@ -207,7 +207,7 @@ class SmkiReviewLogDocxService
             }
 
             $imgPara = $this->tteImageParagraph($dom);
-            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 150)) {
+            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 250)) {
                 $target->parentNode->insertBefore($imgPara, $target);
             }
         }
