@@ -72,6 +72,9 @@ class SmkiReviewLogDocxService
         $this->fillIdentity($dom, $xp, $rows->item(3), $log);
         $this->fillLogTable($dom, $xp, $rows->item(4), $log);
         $this->fillTindakLanjut($dom, $xp, $rows->item(5), $log);
+        // Gambar harus disisipkan SEBELUM fillSignature, karena method itu
+        // mengganti teks paragraf "(…)" menjadi "(Nama)".
+        $this->fillTteImages($zip, $dom, $xp, $log);
         $this->fillSignature($dom, $xp, $rows->item(6), $rows->item(7), $log);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
@@ -159,6 +162,77 @@ class SmkiReviewLogDocxService
             throw new Exception('Kotak tindak lanjut pada template FR-040 tidak ditemukan.');
         }
         $this->setCellText($dom, $xp, $box, $text, 'left', $rPr);
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE tepat di atas paragraf "(Nama)" pada setiap
+     * kolom tanda tangan. Paragraf kosong yang semula disediakan untuk tanda
+     * tangan manual dibuang, sehingga tinggi blok tidak membengkak.
+     */
+    private function fillTteImages($zip, $dom, $xp, SmkiReviewLog $log): void
+    {
+        $people = [
+            [trim((string) $log->dibuat_oleh_nama), trim((string) $log->dibuat_oleh_nip)],
+            [trim((string) $log->mengetahui_nama), trim((string) $log->mengetahui_nip)],
+        ];
+
+        $targets = [];
+        foreach ($xp->query('//w:body//w:p') as $p) {
+            if (strpos(trim($p->textContent), '(…') === 0) {
+                $targets[] = $p;
+            }
+        }
+        if ($targets === []) {
+            return;
+        }
+
+        $resolver = app(TteResolverService::class);
+
+        foreach ($targets as $i => $target) {
+            [$nama, $nip] = $people[$i] ?? ['', ''];
+            $path = $resolver->imagePath($nip, $nama);
+            if ($path === null) {
+                continue;
+            }
+
+            // Buang paragraf kosong di atas "(Nama)" — ruang tanda tangan manual.
+            $prev = $target->previousSibling;
+            while ($prev instanceof \DOMElement
+                && $prev->localName === 'p'
+                && trim($prev->textContent) === ''
+                && !$this->hasChild($prev, 'drawing')) {
+                $node = $prev;
+                $prev = $prev->previousSibling;
+                $node->parentNode->removeChild($node);
+            }
+
+            $imgPara = $this->tteImageParagraph($dom);
+            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 150)) {
+                $target->parentNode->insertBefore($imgPara, $target);
+            }
+        }
+    }
+
+    /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
+    private function tteImageParagraph($dom, ?string $align = 'center')
+    {
+        $p = $dom->createElementNS(self::W_NS, 'w:p');
+        $pPr = $dom->createElementNS(self::W_NS, 'w:pPr');
+
+        $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+        $spacing->setAttributeNS(self::W_NS, 'w:before', '0');
+        $spacing->setAttributeNS(self::W_NS, 'w:after', '60');
+        $pPr->appendChild($spacing);
+
+        if ($align !== null) {
+            $jc = $dom->createElementNS(self::W_NS, 'w:jc');
+            $jc->setAttributeNS(self::W_NS, 'w:val', $align);
+            $pPr->appendChild($jc);
+        }
+
+        $p->appendChild($pPr);
+
+        return $p;
     }
 
     private function fillSignature($dom, $xp, $dateRow, $signRow, SmkiReviewLog $log): void

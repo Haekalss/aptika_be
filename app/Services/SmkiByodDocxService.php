@@ -68,6 +68,7 @@ class SmkiByodDocxService
         $this->fillUnitKerjaSentence($xp, $form);
         $this->fillDevices($dom, $xp, $tables->item(1), $form);
         $this->fillSignatureDate($xp, $form);
+        $this->fillTteImage($zip, $dom, $xp, $form);
         $this->applyPortraitLayout($xp);
         $zip->addFromString('word/document.xml', $dom->saveXML());
 
@@ -229,6 +230,112 @@ class SmkiByodDocxService
                 $this->setCellText($dom, $xp, $cell, (string) ($i + 1), 'left', $rPr);
             }
         }
+    }
+
+    /**
+     * Ganti kotak teks "Spesimen TTE Kepala Unit Kerja" pada template dengan
+     * gambar spesimen TTE sungguhan (inline, rata tengah), diambil dari master
+     * pegawai berdasarkan NIP/nama penanda tangan.
+     *
+     * Template memuat dua kotak teks melayang (text box) yang saling menumpuk,
+     * jadi keduanya dihapus dan diganti satu paragraf gambar.
+     */
+    private function fillTteImage($zip, $dom, $xp, SmkiByodForm $form): void
+    {
+        $nip = trim((string) $form->nip);
+        $nama = trim((string) $form->nama);
+        if ($nip === '' && $nama === '') {
+            return;
+        }
+
+        $path = app(TteResolverService::class)->imagePath($nip, $nama);
+        if ($path === null) {
+            return;
+        }
+
+        $holders = [];
+        foreach ($xp->query('//w:body/w:p') as $p) {
+            if (strpos($p->textContent, 'Spesimen TTE') !== false) {
+                $holders[] = $p;
+            }
+        }
+        if ($holders === []) {
+            return;
+        }
+
+        $anchor = $holders[0];
+
+        // Kotak shape kosong (garis putus-putus) dan placeholder lain di atas
+        // anchor ikut dibuang agar tidak menyisakan bingkai di belakang gambar.
+        $holderIds = [];
+        foreach ($holders as $h) {
+            $holderIds[spl_object_id($h)] = true;
+        }
+
+        $remove = $holders;
+        $prev = $anchor->previousSibling;
+        while ($prev instanceof \DOMElement && $prev->localName === 'p') {
+            $isHolder = isset($holderIds[spl_object_id($prev)]);
+            $hasDrawing = $prev->getElementsByTagNameNS(self::W_NS, 'drawing')->length > 0;
+            $hasPicture = $prev->getElementsByTagNameNS(
+                'http://schemas.openxmlformats.org/drawingml/2006/main',
+                'blip'
+            )->length > 0;
+
+            // textContent tidak bisa dipakai: shape menyisakan teks angka dari
+            // fallback VML, jadi yang diperiksa adalah elemen <w:t> yang terisi.
+            $hasText = false;
+            foreach ($prev->getElementsByTagNameNS(self::W_NS, 't') as $node) {
+                if (trim((string) $node->nodeValue) !== '') {
+                    $hasText = true;
+                    break;
+                }
+            }
+            $isEmptyShape = !$hasText && $hasDrawing && !$hasPicture;
+
+            if (!$isHolder && !$isEmptyShape) {
+                break;
+            }
+
+            $remove[] = $prev;
+            $prev = $prev->previousSibling;
+        }
+
+        $imgPara = $this->tteImageParagraph($dom);
+        $inserted = $this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 190);
+        if ($inserted) {
+            $anchor->parentNode->insertBefore($imgPara, $anchor);
+        }
+
+        // Buang placeholder & kotak kosong (baik saat gambar berhasil
+        // disisipkan maupun tidak, teks placeholder tidak boleh tercetak).
+        foreach ($remove as $node) {
+            if ($node->parentNode) {
+                $node->parentNode->removeChild($node);
+            }
+        }
+    }
+
+    /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
+    private function tteImageParagraph($dom, ?string $align = 'center')
+    {
+        $p = $dom->createElementNS(self::W_NS, 'w:p');
+        $pPr = $dom->createElementNS(self::W_NS, 'w:pPr');
+
+        $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+        $spacing->setAttributeNS(self::W_NS, 'w:before', '60');
+        $spacing->setAttributeNS(self::W_NS, 'w:after', '60');
+        $pPr->appendChild($spacing);
+
+        if ($align !== null) {
+            $jc = $dom->createElementNS(self::W_NS, 'w:jc');
+            $jc->setAttributeNS(self::W_NS, 'w:val', $align);
+            $pPr->appendChild($jc);
+        }
+
+        $p->appendChild($pPr);
+
+        return $p;
     }
 
     /** "Bandung, Tanggal Bulan Tahun" -> "Kota, 17 Oktober 2026" */

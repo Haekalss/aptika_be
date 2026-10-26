@@ -243,6 +243,37 @@ trait FillsDocxTemplate
     }
 
     /**
+     * Cache isi word/_rels/document.xml.rels per paket ZIP.
+     *
+     * ZipArchive::getFromName() mengembalikan false untuk entry yang sudah
+     * ditulis lewat addFromString() pada sesi yang sama, sehingga relasi
+     * gambar kedua dan seterusnya tidak pernah terdaftar. Isi rels karenanya
+     * disimpan di sini dan dibaca dari cache.
+     */
+    private array $docxRelsCache = [];
+
+    private function docxRels(\ZipArchive $zip): ?string
+    {
+        $key = spl_object_id($zip);
+        if (array_key_exists($key, $this->docxRelsCache)) {
+            return $this->docxRelsCache[$key];
+        }
+
+        $xml = $zip->getFromName('word/_rels/document.xml.rels');
+        if ($xml === false) {
+            return null;
+        }
+
+        return $this->docxRelsCache[$key] = $xml;
+    }
+
+    private function putDocxRels(\ZipArchive $zip, string $xml): void
+    {
+        $this->docxRelsCache[spl_object_id($zip)] = $xml;
+        $zip->addFromString('word/_rels/document.xml.rels', $xml);
+    }
+
+    /**
      * Sisipkan gambar (PNG) ke dalam paragraf .docx.
      *
      * Menambahkan file gambar ke word/media/, mendaftarkannya di
@@ -283,9 +314,14 @@ trait FillsDocxTemplate
         $mediaName = 'tte_' . substr(sha1($binary), 0, 10) . '_' . $seq . '.png';
         $zip->addFromString('word/media/' . $mediaName, $binary);
 
-        // Daftarkan relasi gambar
-        $relsXml = $zip->getFromName('word/_rels/document.xml.rels');
-        if ($relsXml === false || $relsXml === '') {
+        // Daftarkan relasi gambar.
+        //
+        // CATATAN: setelah addFromString() pada entry yang sudah ada,
+        // ZipArchive::getFromName() mengembalikan false untuk entry itu.
+        // Karena itu isi rels disimpan di cache dan dibaca dari cache,
+        // bukan dibaca ulang dari paket.
+        $relsXml = $this->docxRels($zip);
+        if ($relsXml === null || $relsXml === '') {
             return false;
         }
 
@@ -307,7 +343,7 @@ trait FillsDocxTemplate
             return false;
         }
         $relsXml = str_replace('</Relationships>', $relXml . '</Relationships>', $relsXml);
-        $zip->addFromString('word/_rels/document.xml.rels', $relsXml);
+        $this->putDocxRels($zip, $relsXml);
 
         // Rasio asli gambar
         $cx = (int) round($widthPx * 9525);            // 1 px = 9525 EMU
