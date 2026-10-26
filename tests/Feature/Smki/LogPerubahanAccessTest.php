@@ -51,6 +51,7 @@ class LogPerubahanAccessTest extends TestCase
 
         $this->actingAs($writer, 'sanctum');
         $created = $this->postJson('/api/smki/log-perubahan', [
+            'status' => 'Draf',
             'title' => 'Perubahan bersama',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertCreated()->assertJsonPath('data.status', 'Draf');
@@ -60,6 +61,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->actingAs($colleague, 'sanctum');
         $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(1, 'data');
         $this->putJson("/api/smki/log-perubahan/{$id}", [
+            'status' => 'Draf',
             'title' => 'Diperbarui rekan',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertOk()->assertJsonPath('data.references.recorderId', $writer->id);
@@ -72,6 +74,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(1, 'data');
         $this->getJson("/api/smki/log-perubahan/{$id}")->assertOk();
         $this->putJson("/api/smki/log-perubahan/{$id}", [
+            'status' => 'Draf',
             'title' => 'Diedit lintas bidang',
             'documentNumber' => 'FR-032/UJI', 'documentRevision' => '2.1', 'documentEffectiveDate' => '2026-10-21',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey()],
@@ -79,8 +82,12 @@ class LogPerubahanAccessTest extends TestCase
             ->assertJsonPath('data.documentRevision', '2.1')->assertJsonPath('data.documentEffectiveDate', '2026-10-21')
             ->assertJsonPath('data.references.recorderId', $writer->id)
             ->assertJsonPath('data.references.bidangId', $aptika->id);
-        $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertUnprocessable();
+        $this->putJson("/api/smki/log-perubahan/{$id}", [
+            'status' => 'Tersimpan', 'title' => 'Belum lengkap',
+            'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey()],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['rfcNumber', 'requestedAt']);
         $otherId = $this->postJson('/api/smki/log-perubahan', [
+            'status' => 'Draf',
             'title' => 'Log IKP',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertCreated()->json('data.id');
@@ -89,6 +96,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->getJson('/api/smki/log-perubahan')->assertOk()->assertJsonCount(2, 'data');
         $this->getJson("/api/smki/log-perubahan/{$otherId}")->assertOk();
         $this->putJson("/api/smki/log-perubahan/{$otherId}", [
+            'status' => 'Draf',
             'title' => 'Ditinjau Admin Aptika',
             'references' => ['bidangId' => $ikp->id, 'objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertOk()->assertJsonPath('data.references.bidangId', $ikp->id)
@@ -108,6 +116,7 @@ class LogPerubahanAccessTest extends TestCase
             $this->actingAs($ordinary, 'sanctum');
             $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$aptika->id)->assertOk();
             $this->postJson('/api/smki/log-perubahan', [
+                'status' => 'Draf',
                 'title' => 'Bidang terlarang',
                 'references' => ['bidangId' => $aptika->id, 'objectKind' => 'sistem', 'objectId' => $system->getKey()],
             ])->assertCreated();
@@ -116,6 +125,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->actingAs($staff, 'sanctum');
         $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$ikp->id)->assertOk();
         $this->postJson('/api/smki/log-perubahan', [
+            'status' => 'Draf',
             'title' => 'Aset bidang lain',
             'references' => ['bidangId' => $aptika->id, 'objectKind' => 'aset', 'objectId' => $asset->id],
         ])->assertUnprocessable();
@@ -125,6 +135,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->getJson('/api/smki/log-perubahan/lookup?bidang_id='.$ikp->id)->assertOk()
             ->assertJsonPath('data.bidang.id', $ikp->id)->assertJsonPath('data.canAccessAllBidang', true);
         $created = $this->postJson('/api/smki/log-perubahan', [
+            'status' => 'Draf',
             'title' => 'Dibuat untuk IKP',
             'references' => ['bidangId' => $ikp->id, 'objectKind' => 'aset', 'objectId' => $asset->id],
         ])->assertCreated()->assertJsonPath('data.references.bidangId', $ikp->id);
@@ -132,7 +143,7 @@ class LogPerubahanAccessTest extends TestCase
         $this->getJson('/api/smki/log-perubahan/'.$created->json('data.id'))->assertOk();
     }
 
-    public function test_final_log_is_locked_and_requires_a_master_employee(): void
+    public function test_complete_log_can_be_saved_edited_drafted_and_deleted(): void
     {
         $bidang = Bidang::where('code', 'APTIKA')->firstOrFail();
         $user = User::factory()->create(['bidang_id' => $bidang->id, 'role' => 'user', 'is_active' => 1]);
@@ -144,24 +155,41 @@ class LogPerubahanAccessTest extends TestCase
         ]);
         $this->actingAs($user, 'sanctum');
         $created = $this->postJson('/api/smki/log-perubahan', [
-            'title' => 'Perubahan final',
+            'status' => 'Draf',
+            'title' => 'Perubahan tersimpan',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => null],
         ])->assertCreated();
         $id = $created->json('data.id');
-        $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertUnprocessable();
         $this->putJson("/api/smki/log-perubahan/{$id}", [
-            'title' => 'Perubahan final', 'startedAt' => '2026-10-18T09:00',
-            'endedAt' => '2026-10-18T10:00', 'before' => 'Sebelum',
-            'action' => 'Tindakan', 'after' => 'Sesudah', 'testing' => 'Lulus',
-            'outcome' => 'Berhasil',
+            'status' => 'Tersimpan', 'title' => 'Belum lengkap',
+            'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey()],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['rfcNumber', 'requestedAt']);
+        $complete = [
+            'status' => 'Tersimpan',
+            'title' => 'Perubahan tersimpan',
+            'documentNumber' => 'FR-032/KOM.03.05/SANDIKAMI',
+            'documentRevision' => '0.0', 'documentEffectiveDate' => '2022-07-07',
+            'rfcNumber' => 'RFC-001', 'requestedBy' => 'Pemohon Uji',
+            'requestedAt' => '2026-10-18', 'changeType' => 'Normal',
+            'priority' => 'Tinggi', 'productionImpact' => 'Layanan berhenti sementara',
+            'resultNotes' => 'Pembaruan berhasil', 'releasedAt' => '2026-10-19',
+            'evaluationNotes' => 'Layanan kembali stabil', 'issuedAt' => '2026-10-20',
+            'preparedBy' => 'Pembuat Uji', 'approvedBy' => 'Penyetuju Uji',
             'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey(), 'executorId' => $employee->id],
-        ])->assertOk();
+        ];
+        $this->putJson("/api/smki/log-perubahan/{$id}", $complete)
+            ->assertOk()->assertJsonPath('data.status', 'Tersimpan')->assertJsonPath('data.rfcNumber', 'RFC-001')
+            ->assertJsonPath('data.approvedBy', 'Penyetuju Uji');
         $otherBidang = Bidang::where('code', 'IKP')->firstOrFail();
         $otherUser = User::factory()->create(['bidang_id' => $otherBidang->id, 'role' => 'user', 'is_active' => 1]);
         $this->actingAs($otherUser, 'sanctum');
-        $this->postJson("/api/smki/log-perubahan/{$id}/finalisasi")->assertOk()
-            ->assertJsonPath('data.status', 'Final');
-        $this->putJson("/api/smki/log-perubahan/{$id}", ['title' => 'Ubah lagi'])->assertStatus(409);
-        $this->deleteJson("/api/smki/log-perubahan/{$id}")->assertStatus(409);
+        $this->getJson("/api/smki/log-perubahan/{$id}")->assertOk()->assertJsonPath('data.status', 'Tersimpan');
+        $this->putJson("/api/smki/log-perubahan/{$id}", array_merge($complete, ['title' => 'Hasil edit']))
+            ->assertOk()->assertJsonPath('data.status', 'Tersimpan')->assertJsonPath('data.title', 'Hasil edit');
+        $this->putJson("/api/smki/log-perubahan/{$id}", [
+            'status' => 'Draf', 'title' => 'Ubah lagi',
+            'references' => ['objectKind' => 'sistem', 'objectId' => $system->getKey()],
+        ])->assertOk()->assertJsonPath('data.status', 'Draf')->assertJsonPath('data.title', 'Ubah lagi');
+        $this->deleteJson("/api/smki/log-perubahan/{$id}")->assertOk();
     }
 }

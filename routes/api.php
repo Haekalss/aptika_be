@@ -1450,7 +1450,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         ->group(function () {
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
-            Route::post('log-perubahan/{id}/finalisasi', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'finalize']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
