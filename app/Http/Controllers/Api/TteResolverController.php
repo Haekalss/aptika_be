@@ -4,19 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pegawai;
-use App\Models\TteSpesimen;
 use App\Services\TteResolverService;
 use Illuminate\Http\Request;
 
 /**
- * Menentukan spesimen TTE mana yang dipakai pada sebuah dokumen.
+ * Menentukan spesimen TTE untuk sebuah dokumen.
  *
- * Urutan pencarian:
- *   1. Master Spesimen TTE (tabel tte_spesimens) — dicocokkan lewat NIP, lalu nama.
- *   2. Fallback ke master pegawai (tabel pegawai).
- *
- * Dengan begitu, data yang ditambahkan di menu Data Master → Spesimen TTE
- * langsung terpakai saat mencetak dokumen.
+ * Sumber data tunggal: master pegawai (tabel pegawai).
+ * Penanda tangan dicocokkan lewat NIP, dengan nama sebagai cadangan.
  */
 class TteResolverController extends Controller
 {
@@ -25,8 +20,34 @@ class TteResolverController extends Controller
     }
 
     /**
+     * GET /api/tte/options
+     * Daftar pilihan penanda tangan (langsung dari data pegawai).
+     */
+    public function options()
+    {
+        $items = Pegawai::query()
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'nip', 'jabatan'])
+            ->map(fn ($p) => [
+                'key' => 'pegawai:' . $p->id,
+                'source' => 'pegawai',
+                'id' => $p->id,
+                'nama' => $p->nama,
+                'nip' => $p->nip,
+                'jabatan' => $p->jabatan,
+                'unit' => null,
+                'label' => $p->nama . ($p->nip ? ' — ' . $p->nip : ''),
+            ])->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Daftar penanda tangan berhasil diambil.',
+            'data' => $items,
+        ], 200);
+    }
+
+    /**
      * GET /api/tte/resolve?nip=...&nama=...
-     * Mengembalikan sumber gambar yang harus dipakai.
      */
     public function resolve(Request $request)
     {
@@ -40,35 +61,32 @@ class TteResolverController extends Controller
             ], 422);
         }
 
-        $match = $this->resolver->find($nip, $nama);
+        $pegawai = $this->resolver->find($nip, $nama);
 
-        if ($match === null) {
+        if ($pegawai === null) {
             return response()->json([
                 'success' => true,
                 'data' => null,
-                'message' => 'Tidak ada spesimen yang cocok.',
+                'message' => 'Tidak ada pegawai yang cocok.',
             ], 200);
         }
-
-        $model = $match['model'];
 
         return response()->json([
             'success' => true,
             'message' => 'Spesimen ditemukan.',
             'data' => [
-                'source' => $match['source'],
-                'id' => $model->id,
-                'nama' => $model->nama,
-                'nip' => $model->nip,
-                'jabatan' => $model->jabatan,
-                'unit' => $model->unit ?? null,
+                'source' => 'pegawai',
+                'id' => $pegawai->id,
+                'nama' => $pegawai->nama,
+                'nip' => $pegawai->nip,
+                'jabatan' => $pegawai->jabatan,
+                'unit' => null,
             ],
         ], 200);
     }
 
     /**
      * GET /api/tte/resolve/image?nip=...&nama=...
-     * Mengembalikan gambar PNG langsung (dipakai <img> lewat blob).
      */
     public function image(Request $request)
     {
@@ -88,59 +106,5 @@ class TteResolverController extends Controller
             'Content-Type' => 'image/png',
             'Cache-Control' => 'private, max-age=300',
         ]);
-    }
-
-    /**
-     * GET /api/tte/options
-     * Daftar pilihan penanda tangan untuk dropdown saat cetak/unduh.
-     * Master spesimen lebih dulu, lalu pegawai yang belum punya spesimen.
-     */
-    public function options()
-    {
-        $master = TteSpesimen::query()
-            ->where('is_active', true)
-            ->orderBy('nama')
-            ->get(['id', 'nama', 'nip', 'jabatan', 'unit']);
-
-        $nipMaster = $master->pluck('nip')->filter()->all();
-
-        $pegawai = Pegawai::query()
-            ->orderBy('nama')
-            ->get(['id', 'nama', 'nip', 'jabatan'])
-            ->reject(fn ($p) => $p->nip !== null && in_array($p->nip, $nipMaster, true))
-            ->values();
-
-        $items = $master->map(fn ($m) => [
-            'key' => 'master:' . $m->id,
-            'source' => 'master',
-            'id' => $m->id,
-            'nama' => $m->nama,
-            'nip' => $m->nip,
-            'jabatan' => $m->jabatan,
-            'unit' => $m->unit,
-            'label' => $m->nama . ($m->nip ? ' — ' . $m->nip : ''),
-        ])->concat($pegawai->map(fn ($p) => [
-            'key' => 'pegawai:' . $p->id,
-            'source' => 'pegawai',
-            'id' => $p->id,
-            'nama' => $p->nama,
-            'nip' => $p->nip,
-            'jabatan' => $p->jabatan,
-            'unit' => null,
-            'label' => $p->nama . ($p->nip ? ' — ' . $p->nip : ''),
-        ]))->values();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Daftar penanda tangan berhasil diambil.',
-            'data' => $items,
-        ], 200);
-    }
-
-    /** Cari spesimen: master dulu, baru pegawai. */
-    private function findSpesimen(string $nip, string $nama): ?array
-    {
-        // Delegasi ke service agar konsisten dengan ekspor DOCX.
-        return $this->resolver->find($nip, $nama);
     }
 }

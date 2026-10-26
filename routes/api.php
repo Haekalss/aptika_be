@@ -304,29 +304,19 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     });
 
     // =================================================
-    // SPESIMEN TTE (TANDA TANGAN ELEKTRONIK)
-    // =================================================
-    Route::prefix('tte')->name('tte.')->group(function () {
-        Route::get('pegawai', [\App\Http\Controllers\Api\TteSpecimenController::class, 'pegawai'])->name('pegawai');
-        Route::get('data/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'data'])->name('data');
-        Route::get('spesimen/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'show'])->name('spesimen');
+        // SPESIMEN TTE (TANDA TANGAN ELEKTRONIK)
+        // Sumber data: master pegawai (tabel pegawai).
+        // =================================================
+        Route::prefix('tte')->name('tte.')->group(function () {
+            Route::get('pegawai', [\App\Http\Controllers\Api\TteSpecimenController::class, 'pegawai'])->name('pegawai');
+            Route::get('data/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'data'])->name('data');
+            Route::get('spesimen/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'show'])->name('spesimen');
 
-        // Resolver: cari spesimen dari NIP/nama (master dulu, lalu pegawai)
-        Route::get('resolve', [\App\Http\Controllers\Api\TteResolverController::class, 'resolve'])->name('resolve');
-        Route::get('resolve/image', [\App\Http\Controllers\Api\TteResolverController::class, 'image'])->name('resolve.image');
-        Route::get('options', [\App\Http\Controllers\Api\TteResolverController::class, 'options'])->name('options');
-
-        // Master spesimen TTE (CRUD)
-        Route::post('master/preview', [\App\Http\Controllers\Api\TteSpesimenController::class, 'preview'])->name('master.preview');
-        Route::get('master/{id}/image', [\App\Http\Controllers\Api\TteSpesimenController::class, 'image'])->name('master.image');
-        Route::apiResource('master', \App\Http\Controllers\Api\TteSpesimenController::class)->names([
-            'index' => 'master.index',
-            'store' => 'master.store',
-            'show' => 'master.show',
-            'update' => 'master.update',
-            'destroy' => 'master.destroy',
-        ]);
-    });
+            // Resolver & daftar pilihan penanda tangan (dari master pegawai)
+            Route::get('resolve', [\App\Http\Controllers\Api\TteResolverController::class, 'resolve'])->name('resolve');
+            Route::get('resolve/image', [\App\Http\Controllers\Api\TteResolverController::class, 'image'])->name('resolve.image');
+            Route::get('options', [\App\Http\Controllers\Api\TteResolverController::class, 'options'])->name('options');
+        });
 
     // =================================================                ]);
 

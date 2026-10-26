@@ -3,12 +3,11 @@
 namespace App\Services;
 
 use App\Models\Pegawai;
-use App\Models\TteSpesimen;
 
 /**
  * Menentukan sumber spesimen TTE untuk sebuah dokumen.
  *
- * Urutan: master spesimen TTE (aktif) → fallback master pegawai.
+ * Sumber data tunggal: master pegawai (tabel pegawai).
  * Dipakai bersama oleh endpoint API dan ekspor DOCX agar hasilnya konsisten.
  */
 class TteResolverService
@@ -17,8 +16,8 @@ class TteResolverService
     {
     }
 
-    /** Cari data sumber (model) berdasarkan NIP/nama. */
-    public function find(string $nip, string $nama): ?array
+    /** Cari pegawai berdasarkan NIP/nama untuk dijadikan penanda tangan. */
+    public function find(string $nip, string $nama): ?Pegawai
     {
         $nip = trim($nip);
         $nama = trim($nama);
@@ -27,50 +26,27 @@ class TteResolverService
             return null;
         }
 
-        $master = TteSpesimen::query()
-            ->where('is_active', true)
-            ->when($nip !== '', fn ($q) => $q->where('nip', $nip))
-            ->when($nip === '' && $nama !== '', fn ($q) => $q->where('nama', 'like', "%{$nama}%"))
-            ->first();
-
-        if (!$master && $nip !== '' && $nama !== '') {
-            $master = TteSpesimen::query()
-                ->where('is_active', true)
-                ->where('nama', 'like', "%{$nama}%")
-                ->first();
-        }
-
-        if ($master) {
-            return ['source' => 'master', 'model' => $master];
-        }
-
         $pegawai = Pegawai::query()
             ->when($nip !== '', fn ($q) => $q->where('nip', $nip))
             ->when($nip === '' && $nama !== '', fn ($q) => $q->where('nama', 'like', "%{$nama}%"))
             ->first();
 
+        // Bila NIP tidak cocok, coba lewat nama sebagai cadangan.
         if (!$pegawai && $nip !== '' && $nama !== '') {
             $pegawai = Pegawai::query()->where('nama', 'like', "%{$nama}%")->first();
         }
 
-        if ($pegawai) {
-            return ['source' => 'pegawai', 'model' => $pegawai];
-        }
-
-        return null;
+        return $pegawai;
     }
 
     /** Path file PNG spesimen, atau null bila tidak ada / gagal render. */
     public function imagePath(string $nip, string $nama): ?string
     {
-        $found = $this->find($nip, $nama);
-        if ($found === null) {
+        $pegawai = $this->find($nip, $nama);
+        if ($pegawai === null) {
             return null;
         }
 
-        $model = $found['model'];
-        $unit = $found['source'] === 'master' ? ($model->unit ?? null) : null;
-
-        return $this->renderer->generate($model, $unit);
+        return $this->renderer->generate($pegawai, null);
     }
 }
