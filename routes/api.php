@@ -1458,6 +1458,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.komunikasi.destroy',
                 ]);
 
+            // Formulir Log Perubahan (FR-032)
+            Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
+            Route::post('log-perubahan/{id}/finalisasi', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'finalize']);
+            Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
@@ -1665,6 +1669,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::delete('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'destroy'])
                 ->name('smki.aset-sistem-informasi.destroy');
             // ==========================================
+
+            // Berita Acara Screening Karyawan Outsourcing (FR-012/KOM.03.05/SANDIKAMI)
+            Route::get('screening-karyawan/lookup', [\App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class, 'lookup'])
+                ->name('smki.screening-karyawan.lookup');
+            Route::get('screening-karyawan/{id}/print', [\App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class, 'printHtml'])
+                ->name('smki.screening-karyawan.print');
+            Route::apiResource('screening-karyawan', \App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class)
+                ->names([
+                    'index'   => 'smki.screening-karyawan.index',
+                    'store'   => 'smki.screening-karyawan.store',
+                    'show'    => 'smki.screening-karyawan.show',
+                    'update'  => 'smki.screening-karyawan.update',
+                    'destroy' => 'smki.screening-karyawan.destroy',
+                ]);
         });
 
     // =================================================                ]);
