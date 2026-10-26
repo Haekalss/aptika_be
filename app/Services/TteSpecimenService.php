@@ -28,20 +28,14 @@ use GdImage;
 class TteSpecimenService
 {
     /** Versi tata letak — dinaikkan bila bentuk spesimen berubah (memaksa cache baru). */
-    private const LAYOUT_VERSION = 4;
+    private const LAYOUT_VERSION = 5;
 
-    /** Margin putih di luar bingkai luar (px). */
-    private const FRAME_PAD = 3;
+    /** Margin putih tipis agar garis kotak tidak terpotong (px). */
+    private const MARGIN = 3;
 
-    /** Bingkai luar persegi (bukan kotak rounded) — ukuran dari template 313x125 @1x. */
-    private const FRAME_X = 3;
-    private const FRAME_Y = 3;
-    private const FRAME_W = 939;
-    private const FRAME_H_MIN = 375;
-
-    /** Kotak rounded di dalam bingkai (template 285x114 @1x, inset 13/5). */
-    private const BOX_X1 = 42;
-    private const BOX_Y1 = 18;
+    /** Kotak rounded (tanpa bingkai luar). Template 285x114 @1x. */
+    private const BOX_X1 = 3;
+    private const BOX_Y1 = 3;
     private const BOX_W = 855;
     private const BOX_H_MIN = 342;
 
@@ -205,10 +199,8 @@ class TteSpecimenService
         }
 
         $boxH = max(self::BOX_H_MIN, $nipY + self::PAD_BAWAH);
-        // Bingkai luar: 15px ruang di atas kotak, 18px di bawahnya (rasio template).
-        $frameH = max(self::FRAME_H_MIN, $boxH + 33);
-        $canvasW = self::FRAME_X + self::FRAME_W + self::FRAME_PAD;
-        $canvasH = self::FRAME_Y + $frameH + self::FRAME_PAD;
+        $canvasW = self::BOX_W + self::BOX_X1 * 2;
+        $canvasH = $boxH + self::BOX_Y1 * 2;
 
         // --- Kanvas ---
         $img = imagecreatetruecolor($canvasW, $canvasH);
@@ -224,18 +216,7 @@ class TteSpecimenService
 
         imagesetthickness($img, 3);
 
-        // --- Bingkai luar: persegi, sudut tajam ---
-        $fx1 = self::FRAME_X;
-        $fy1 = self::FRAME_Y;
-        $fx2 = $fx1 + self::FRAME_W;
-        $fy2 = $fy1 + $frameH;
-
-        imageline($img, $fx1, $fy1, $fx2, $fy1, $border);
-        imageline($img, $fx1, $fy2, $fx2, $fy2, $border);
-        imageline($img, $fx1, $fy1, $fx1, $fy2, $border);
-        imageline($img, $fx2, $fy1, $fx2, $fy2, $border);
-
-        // --- Kotak rounded di dalam bingkai ---
+        // --- Kotak rounded ---
         $x1 = self::BOX_X1;
         $y1 = self::BOX_Y1;
         $x2 = $x1 + self::BOX_W;
