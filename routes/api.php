@@ -1448,6 +1448,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::middleware(['service.enabled:SMKI'])
         ->prefix('smki')
         ->group(function () {
+            Route::put('komunikasi/header', [\App\Http\Controllers\Smki\SmkiKomunikasiController::class, 'updateHeader']);
+            Route::apiResource('komunikasi', \App\Http\Controllers\Smki\SmkiKomunikasiController::class)
+                ->names([
+                    'index' => 'smki.komunikasi.index',
+                    'store' => 'smki.komunikasi.store',
+                    'show' => 'smki.komunikasi.show',
+                    'update' => 'smki.komunikasi.update',
+                    'destroy' => 'smki.komunikasi.destroy',
+                ]);
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
@@ -1669,4 +1679,3 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         ->name('daftar-aset-ti.export-excel');
     Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
 });
-
