@@ -3,6 +3,51 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$mysqlSslCa = env('MYSQL_ATTR_SSL_CA');
+$mysqlHost = parse_url(env('DB_URL') ?: '', PHP_URL_HOST) ?: env('DB_HOST', '127.0.0.1');
+$mysqlSslOptions = [];
+
+// TiDB public endpoints require verified TLS, including when no CA path is supplied.
+if (extension_loaded('pdo_mysql') && ($mysqlSslCa || str_ends_with(strtolower(rtrim($mysqlHost, '.')), '.tidbcloud.com'))) {
+    $certificateLocations = function_exists('openssl_get_cert_locations') ? openssl_get_cert_locations() : [];
+    $certificateCandidates = [
+        is_string($mysqlSslCa) ? $mysqlSslCa : null,
+        ini_get('openssl.cafile'),
+        env('SSL_CERT_FILE'),
+        $certificateLocations['default_cert_file'] ?? null,
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/etc/ssl/cert.pem',
+        '/etc/pki/tls/certs/ca-bundle.crt',
+        base_path('database/isrgrootx1.pem'),
+        storage_path('certs/isrgrootx1.pem'),
+    ];
+
+    $certificatePath = null;
+    foreach ($certificateCandidates as $candidate) {
+        if (! is_string($candidate) || $candidate === '') {
+            continue;
+        }
+
+        if (! str_starts_with($candidate, '/') && ! str_starts_with($candidate, '\\') && ! preg_match('/^[A-Za-z]:/', $candidate)) {
+            $candidate = base_path($candidate);
+        }
+
+        if (is_file($candidate) && is_readable($candidate)) {
+            $certificatePath = $candidate;
+            break;
+        }
+    }
+
+    if ($certificatePath === null) {
+        throw new RuntimeException('No readable MySQL CA certificate found. Set MYSQL_ATTR_SSL_CA to a valid CA path or include database/isrgrootx1.pem in the deployment.');
+    }
+
+    $mysqlSslOptions = [
+        (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => $certificatePath,
+        (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_VERIFY_SERVER_CERT : PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT) => true,
+    ];
+}
+
 return [
 
     /*
@@ -59,9 +104,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlSslOptions,
         ],
 
         'mariadb' => [
@@ -79,23 +122,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => (extension_loaded('pdo_mysql') && env('MYSQL_ATTR_SSL_CA')) ? [
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => (function () {
-                    $val = env('MYSQL_ATTR_SSL_CA');
-                    if ($val && $val !== true && $val !== 'true' && $val !== '1' && file_exists($val)) {
-                        return $val;
-                    }
-                    $cert = base_path('database/isrgrootx1.pem');
-                    if (file_exists($cert)) {
-                        return $cert;
-                    }
-                    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-                        return '/etc/ssl/certs/ca-certificates.crt';
-                    }
-                    return true;
-                })(),
-                PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
-            ] : [],
+            'options' => $mysqlSslOptions,
         ],
 
         'pgsql' => [

@@ -12,6 +12,8 @@ Project ini dibangun menggunakan **Laravel 13** dan **PHP 8.4** serta menyediaka
 - Kerentanan aplikasi (vulnerabilities)
 - Manajemen pengguna dan autentikasi
 
+Untuk production **Vercel → Wasmer → TiDB Cloud**, ikuti [panduan deployment](DEPLOYMENT.md) dan gunakan [.env.wasmer.example](.env.wasmer.example) sebagai referensi variabel Wasmer.
+
 ## Prasyarat
 
 Sebelum menjalankan project, pastikan software berikut telah tersedia di laptop.
