@@ -2,6 +2,11 @@
 
 return [
 
+    'fr009' => [
+        'pdf_converter' => env('FR009_PDF_CONVERTER', ''),
+        'pdf_timeout' => (int) env('FR009_PDF_TIMEOUT', 60),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

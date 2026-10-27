@@ -1466,6 +1466,17 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
+
+            // Formulir Tindakan Perbaikan dan Pencegahan (FR-009)
+            Route::get('tindakan-perbaikan/lookup', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'lookup']);
+            Route::post('tindakan-perbaikan/{tindakanPerbaikan}/submit', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'submit']);
+            Route::post('tindakan-perbaikan/{tindakanPerbaikan}/verify', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'verify']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-docx', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'docx']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-pdf', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'pdf']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-pdf-data', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'pdfData']);
+            Route::apiResource('tindakan-perbaikan', \App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class)
+                ->parameters(['tindakan-perbaikan' => 'tindakanPerbaikan']);
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
