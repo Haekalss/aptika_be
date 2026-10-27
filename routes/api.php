@@ -1569,6 +1569,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.evaluasi-drp.destroy',
                 ]);
 
+            // Formulir Checklist Monitoring dan Pemeliharaan CCTV (FR-037)
+            Route::get('pemeriksaan-cctv/terakhir', [\App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class, 'terakhir'])
+                ->name('smki.pemeriksaan-cctv.terakhir');
+            Route::get('pemeriksaan-cctv/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class, 'exportDocx'])
+                ->name('smki.pemeriksaan-cctv.export-docx');
+            Route::apiResource('pemeriksaan-cctv', \App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class)
+                ->names([
+                    'index'   => 'smki.pemeriksaan-cctv.index',
+                    'store'   => 'smki.pemeriksaan-cctv.store',
+                    'show'    => 'smki.pemeriksaan-cctv.show',
+                    'update'  => 'smki.pemeriksaan-cctv.update',
+                    'destroy' => 'smki.pemeriksaan-cctv.destroy',
+                ]);
+
             // Berita Acara Penghancuran Media (FR014-SMKI)
             Route::get('berita-acara/lookup', [\App\Http\Controllers\Smki\SmkiBeritaAcaraController::class, 'lookup'])
                 ->name('smki.berita-acara.lookup');
