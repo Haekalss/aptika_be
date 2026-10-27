@@ -1688,6 +1688,26 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                 ]);
 
             // ==========================================
+            // PELAPORAN INSIDEN KEAMANAN INFORMASI (FR-016)
+            // ==========================================
+            Route::get('pelaporan-insiden/lookup', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'lookup'])
+                ->name('smki.pelaporan-insiden.lookup');
+            Route::get('pelaporan-insiden/export-docx', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'exportDocx'])
+                ->name('smki.pelaporan-insiden.export-docx-all');
+            Route::get('pelaporan-insiden/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'exportDocx'])
+                ->name('smki.pelaporan-insiden.export-docx-single');
+            Route::get('pelaporan-insiden/{id}/unduh', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'downloadBukti'])
+                ->name('smki.pelaporan-insiden.download');
+            Route::apiResource('pelaporan-insiden', \App\Http\Controllers\Smki\SmkiInsidenReportController::class)
+                ->names([
+                    'index'   => 'smki.pelaporan-insiden.index',
+                    'store'   => 'smki.pelaporan-insiden.store',
+                    'show'    => 'smki.pelaporan-insiden.show',
+                    'update'  => 'smki.pelaporan-insiden.update',
+                    'destroy' => 'smki.pelaporan-insiden.destroy',
+                ]);
+
+            // ==========================================
             // ASET SISTEM INFORMASI (FR-036)
             // ==========================================
             Route::get('aset-sistem-informasi', [AsetSistemInformasiController::class, 'index'])
