@@ -52,6 +52,11 @@ class DatabaseSeeder extends Seeder
             SmkiFormulirHardeningSeeder::class,
         ]);
 
+        // Data contoh FR-025 membutuhkan akun, bidang, dan master aset yang sudah tersedia.
+        if (app()->environment(['local', 'testing'])) {
+            $this->call(SmkiRemovableMediaSeeder::class);
+        }
+
         // Seed SMKI Rencana Audit (master: bidang_auditee, lokasi_auditee, auditee, auditor)
         $this->call([
             RencanaAuditMasterSeeder::class,

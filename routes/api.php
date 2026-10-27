@@ -1477,6 +1477,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::apiResource('tindakan-perbaikan', \App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class)
                 ->parameters(['tindakan-perbaikan' => 'tindakanPerbaikan']);
 
+            Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
+            Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
+            Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
+                ->parameters(['removable-media' => 'removable_media']);
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
