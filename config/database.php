@@ -80,7 +80,20 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => (extension_loaded('pdo_mysql') && env('MYSQL_ATTR_SSL_CA')) ? [
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => true,
+                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => (function () {
+                    $val = env('MYSQL_ATTR_SSL_CA');
+                    if ($val && $val !== true && $val !== 'true' && $val !== '1' && file_exists($val)) {
+                        return $val;
+                    }
+                    $cert = base_path('database/isrgrootx1.pem');
+                    if (file_exists($cert)) {
+                        return $cert;
+                    }
+                    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
+                        return '/etc/ssl/certs/ca-certificates.crt';
+                    }
+                    return true;
+                })(),
                 PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
             ] : [],
         ],
