@@ -1463,6 +1463,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::middleware(['service.enabled:SMKI'])
         ->prefix('smki')
         ->group(function () {
+            Route::put('komunikasi/header', [\App\Http\Controllers\Smki\SmkiKomunikasiController::class, 'updateHeader']);
+            Route::apiResource('komunikasi', \App\Http\Controllers\Smki\SmkiKomunikasiController::class)
+                ->names([
+                    'index' => 'smki.komunikasi.index',
+                    'store' => 'smki.komunikasi.store',
+                    'show' => 'smki.komunikasi.show',
+                    'update' => 'smki.komunikasi.update',
+                    'destroy' => 'smki.komunikasi.destroy',
+                ]);
+
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
@@ -1782,4 +1792,3 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         ->name('daftar-aset-ti.export-excel');
     Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
 });
-
