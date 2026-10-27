@@ -82,15 +82,30 @@ return [
             'options' => (extension_loaded('pdo_mysql') && env('MYSQL_ATTR_SSL_CA')) ? [
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => (function () {
                     $val = env('MYSQL_ATTR_SSL_CA');
-                    if ($val && $val !== true && $val !== 'true' && $val !== '1' && file_exists($val)) {
-                        return $val;
+                    if ($val && $val !== true && $val !== 'true' && $val !== '1') {
+                        if (file_exists($val)) {
+                            return $val;
+                        }
+                        $clean = ltrim($val, '/\\');
+                        if (file_exists(base_path($clean))) {
+                            return base_path($clean);
+                        }
+                        if (file_exists(storage_path($clean))) {
+                            return storage_path($clean);
+                        }
                     }
-                    $cert = base_path('database/isrgrootx1.pem');
-                    if (file_exists($cert)) {
-                        return $cert;
-                    }
-                    if (file_exists('/etc/ssl/certs/ca-certificates.crt')) {
-                        return '/etc/ssl/certs/ca-certificates.crt';
+                    $candidates = [
+                        storage_path('certs/isrgrootx1.pem'),
+                        __DIR__ . '/../storage/certs/isrgrootx1.pem',
+                        base_path('storage/certs/isrgrootx1.pem'),
+                        base_path('database/isrgrootx1.pem'),
+                        __DIR__ . '/../database/isrgrootx1.pem',
+                        '/etc/ssl/certs/ca-certificates.crt',
+                    ];
+                    foreach ($candidates as $c) {
+                        if (file_exists($c)) {
+                            return $c;
+                        }
                     }
                     return true;
                 })(),
