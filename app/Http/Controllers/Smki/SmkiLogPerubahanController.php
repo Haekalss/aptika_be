@@ -24,6 +24,9 @@ class SmkiLogPerubahanController extends Controller
         'title', 'startedAt', 'endedAt', 'before', 'action', 'after', 'testing',
         'outcome', 'obstacles', 'followUp', 'recovery', 'needsFollowUp', 'attachments',
         'documentNumber', 'documentRevision', 'documentEffectiveDate',
+        'rfcNumber', 'requestedBy', 'requestedAt', 'changeType', 'priority',
+        'productionImpact', 'resultNotes', 'releasedAt', 'evaluationNotes',
+        'issuedAt', 'preparedBy', 'approvedBy',
     ];
 
     // FR-032 is shared across bidang; other modules retain their existing scope.
@@ -71,6 +74,7 @@ class SmkiLogPerubahanController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $status = $request->validate(['status' => ['required', Rule::in(['Draf', 'Tersimpan'])]])['status'];
         $validated = $this->validateInput($request->all());
         $bidang = $this->resolveBidang($request, (int) ($validated['references']['bidangId'] ?? $request->user()->bidang_id));
         $clientLogId = $request->input('clientLogId');
@@ -82,8 +86,9 @@ class SmkiLogPerubahanController extends Controller
         $object = $this->resolveObject($bidang->id, $validated['references']);
         $employee = $this->resolveEmployee($validated['references']['executorId'] ?? null);
         $payload = $this->payload($validated);
+        if ($status === 'Tersimpan') $this->validateComplete($payload, $employee);
 
-        $log = DB::transaction(function () use ($request, $payload, $validated, $object, $employee, $clientLogId, $bidang) {
+        $log = DB::transaction(function () use ($request, $payload, $validated, $object, $employee, $clientLogId, $bidang, $status) {
             $log = SmkiLogPerubahan::create([
                 'client_log_id' => $clientLogId,
                 'bidang_id' => $bidang->id,
@@ -95,7 +100,7 @@ class SmkiLogPerubahanController extends Controller
                 'object_label' => $object,
                 'executor_id' => $employee?->id,
                 'executor_name' => $employee?->nama,
-                'status' => 'Draf',
+                'status' => $status,
                 'payload' => $payload,
             ]);
             $log->nomor_log = sprintf('LOG-%s-%06d', now()->year, $log->id);
@@ -110,35 +115,24 @@ class SmkiLogPerubahanController extends Controller
     {
         $log = DB::transaction(function () use ($request, $id) {
             $log = $this->scoped($request)->lockForUpdate()->findOrFail($id);
-            if ($log->status !== 'Draf') abort(409, 'Log Final tidak dapat diubah.');
+            $status = $request->validate(['status' => ['required', Rule::in(['Draf', 'Tersimpan'])]])['status'];
             $validated = $this->validateInput($request->all());
             if (isset($validated['references']['bidangId']) && (int) $validated['references']['bidangId'] !== $log->bidang_id) {
                 throw ValidationException::withMessages(['references.bidangId' => 'Bidang pemilik log tidak dapat diubah.']);
             }
             $object = $this->resolveObject($log->bidang_id, $validated['references']);
             $employee = $this->resolveEmployee($validated['references']['executorId'] ?? null);
+            $payload = $this->payload($validated);
+            if ($status === 'Tersimpan') $this->validateComplete($payload, $employee);
             $log->update([
                 'object_kind' => $validated['references']['objectKind'],
                 'object_id' => $validated['references']['objectId'],
                 'object_label' => $object,
                 'executor_id' => $employee?->id,
                 'executor_name' => $employee?->nama,
-                'payload' => $this->payload($validated),
+                'payload' => $payload,
+                'status' => $status,
             ]);
-            return $log;
-        });
-        return response()->json(['success' => true, 'data' => $this->present($log)]);
-    }
-
-    public function finalize(Request $request, string $id): JsonResponse
-    {
-        $log = DB::transaction(function () use ($request, $id) {
-            $log = $this->scoped($request)->lockForUpdate()->findOrFail($id);
-            if ($log->status !== 'Draf') abort(409, 'Log sudah Final.');
-            $this->resolveObject($log->bidang_id, ['objectKind' => $log->object_kind, 'objectId' => $log->object_id]);
-            $employee = $this->resolveEmployee($log->executor_id);
-            $this->validateFinal($log->payload, $employee);
-            $log->update(['status' => 'Final', 'finalized_at' => now()]);
             return $log;
         });
         return response()->json(['success' => true, 'data' => $this->present($log)]);
@@ -148,10 +142,9 @@ class SmkiLogPerubahanController extends Controller
     {
         DB::transaction(function () use ($request, $id) {
             $log = $this->scoped($request)->lockForUpdate()->findOrFail($id);
-            if ($log->status !== 'Draf') abort(409, 'Log Final tidak dapat dihapus.');
             $log->delete();
         });
-        return response()->json(['success' => true, 'message' => 'Draf log berhasil dihapus.']);
+        return response()->json(['success' => true, 'message' => 'Log berhasil dihapus.']);
     }
 
     private function validateInput(array $input): array
@@ -160,6 +153,18 @@ class SmkiLogPerubahanController extends Controller
             'documentNumber' => ['nullable', 'string', 'max:255'],
             'documentRevision' => ['nullable', 'string', 'max:255'],
             'documentEffectiveDate' => ['nullable', 'date_format:Y-m-d'],
+            'rfcNumber' => ['nullable', 'string', 'max:255'],
+            'requestedBy' => ['nullable', 'string', 'max:255'],
+            'requestedAt' => ['nullable', 'date_format:Y-m-d'],
+            'changeType' => ['nullable', 'string', 'max:255'],
+            'priority' => ['nullable', 'string', 'max:255'],
+            'productionImpact' => ['nullable', 'string', 'max:5000'],
+            'resultNotes' => ['nullable', 'string', 'max:5000'],
+            'releasedAt' => ['nullable', 'date_format:Y-m-d'],
+            'evaluationNotes' => ['nullable', 'string', 'max:5000'],
+            'issuedAt' => ['nullable', 'date_format:Y-m-d'],
+            'preparedBy' => ['nullable', 'string', 'max:255'],
+            'approvedBy' => ['nullable', 'string', 'max:255'],
             'title' => ['required', 'string', 'max:255'],
             'startedAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
             'endedAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
@@ -186,6 +191,9 @@ class SmkiLogPerubahanController extends Controller
         ];
         if (!empty($input['startedAt'])) $rules['endedAt'][] = 'after_or_equal:startedAt';
         $validated = Validator::make($input, $rules)->validate();
+        if (!empty($validated['requestedAt']) && !empty($validated['releasedAt']) && $validated['releasedAt'] < $validated['requestedAt']) {
+            throw ValidationException::withMessages(['releasedAt' => 'Tanggal rilis tidak boleh sebelum tanggal permintaan.']);
+        }
         $bytes = 0;
         foreach ($validated['attachments'] ?? [] as $index => $attachment) {
             $extension = strtolower(pathinfo($attachment['name'], PATHINFO_EXTENSION));
@@ -221,15 +229,12 @@ class SmkiLogPerubahanController extends Controller
         return $payload;
     }
 
-    private function validateFinal(array $payload, ?Pegawai $employee): void
+    private function validateComplete(array $payload, ?Pegawai $employee): void
     {
-        $required = ['title', 'startedAt', 'endedAt', 'before', 'action', 'after', 'testing', 'outcome'];
+        $required = ['documentNumber', 'documentRevision', 'documentEffectiveDate', 'rfcNumber', 'title', 'requestedBy', 'requestedAt', 'changeType', 'priority', 'productionImpact', 'resultNotes', 'releasedAt', 'evaluationNotes', 'issuedAt', 'preparedBy', 'approvedBy'];
         $errors = [];
-        foreach ($required as $field) if (!trim((string) ($payload[$field] ?? ''))) $errors[$field] = 'Bagian ini wajib diisi sebelum finalisasi.';
-        if (!$employee) $errors['references.executorId'] = 'Pilih pelaksana dari master pegawai.';
-        if (($payload['needsFollowUp'] ?? false) && !trim((string) ($payload['followUp'] ?? ''))) {
-            $errors['followUp'] = 'Tindak lanjut wajib diisi.';
-        }
+        foreach ($required as $field) if (!trim((string) ($payload[$field] ?? ''))) $errors[$field] = 'Bagian ini wajib diisi sebelum menyimpan.';
+        if (!$employee) $errors['references.executorId'] = 'Pilih PIC dari master pegawai.';
         if ($errors) throw ValidationException::withMessages($errors);
     }
 
@@ -268,10 +273,9 @@ class SmkiLogPerubahanController extends Controller
             'system' => $log->object_label,
             'unit' => $log->unit_name,
             'executor' => $log->executor_name ?? '',
-            'status' => $log->status,
+            'status' => $log->status === 'Final' ? 'Tersimpan' : $log->status,
             'createdAt' => $log->created_at->toIso8601String(),
             'updatedAt' => $log->updated_at->toIso8601String(),
-            'finalizedAt' => $log->finalized_at?->toIso8601String() ?? '',
             'references' => [
                 'bidangId' => $log->bidang_id,
                 'recorderId' => $log->recorder_id,
