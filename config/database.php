@@ -7,24 +7,30 @@ $mysqlSslCa = env('MYSQL_ATTR_SSL_CA');
 $mysqlHost = parse_url(env('DB_URL') ?: '', PHP_URL_HOST) ?: env('DB_HOST', '127.0.0.1');
 $mysqlSslOptions = [];
 
-// TiDB public endpoints require verified TLS, including when no CA path is supplied.
-if (extension_loaded('pdo_mysql') && ($mysqlSslCa || str_ends_with(strtolower(rtrim($mysqlHost, '.')), '.tidbcloud.com'))) {
+// TiDB public endpoints require TLS, including when no CA path is supplied.
+if (extension_loaded('pdo_mysql') && ($mysqlSslCa || str_contains(strtolower((string) $mysqlHost), 'tidbcloud.com'))) {
     $certificateLocations = function_exists('openssl_get_cert_locations') ? openssl_get_cert_locations() : [];
+    $cleanEnvCa = is_string($mysqlSslCa) ? ltrim($mysqlSslCa, '/\\') : null;
+
     $certificateCandidates = [
         is_string($mysqlSslCa) ? $mysqlSslCa : null,
+        $cleanEnvCa ? base_path($cleanEnvCa) : null,
+        $cleanEnvCa ? storage_path($cleanEnvCa) : null,
+        base_path('database/isrgrootx1.pem'),
+        storage_path('certs/isrgrootx1.pem'),
+        __DIR__ . '/../database/isrgrootx1.pem',
+        __DIR__ . '/../storage/certs/isrgrootx1.pem',
         ini_get('openssl.cafile'),
         env('SSL_CERT_FILE'),
         $certificateLocations['default_cert_file'] ?? null,
         '/etc/ssl/certs/ca-certificates.crt',
         '/etc/ssl/cert.pem',
         '/etc/pki/tls/certs/ca-bundle.crt',
-        base_path('database/isrgrootx1.pem'),
-        storage_path('certs/isrgrootx1.pem'),
     ];
 
     $certificatePath = null;
     foreach ($certificateCandidates as $candidate) {
-        if (! is_string($candidate) || $candidate === '') {
+        if (! is_string($candidate) || $candidate === '' || $candidate === 'true' || $candidate === '1') {
             continue;
         }
 
@@ -38,14 +44,16 @@ if (extension_loaded('pdo_mysql') && ($mysqlSslCa || str_ends_with(strtolower(rt
         }
     }
 
-    if ($certificatePath === null) {
-        throw new RuntimeException('No readable MySQL CA certificate found. Set MYSQL_ATTR_SSL_CA to a valid CA path or include database/isrgrootx1.pem in the deployment.');
-    }
+    $verifyAttr = PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_VERIFY_SERVER_CERT : PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT;
+    $caAttr = PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA;
 
     $mysqlSslOptions = [
-        (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => $certificatePath,
-        (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_VERIFY_SERVER_CERT : PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT) => true,
+        $verifyAttr => filter_var(env('MYSQL_ATTR_SSL_VERIFY_SERVER_CERT', false), FILTER_VALIDATE_BOOLEAN),
     ];
+
+    if ($certificatePath !== null) {
+        $mysqlSslOptions[$caAttr] = $certificatePath;
+    }
 }
 
 return [
