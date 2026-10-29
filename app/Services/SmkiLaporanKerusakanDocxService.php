@@ -34,9 +34,27 @@ class SmkiLaporanKerusakanDocxService
     }
 
     /**
+     * Format tanggal berlaku ke Bahasa Indonesia (contoh: 20 Januari 2022).
+     */
+    private function formatTanggalIndo(?string $value, string $fallback = '20 Januari 2022'): string
+    {
+        if (empty($value)) {
+            return $fallback;
+        }
+        try {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}/', trim($value))) {
+                return Carbon::parse($value)->locale('id')->translatedFormat('d F Y');
+            }
+            return trim($value);
+        } catch (\Throwable $e) {
+            return trim($value) ?: $fallback;
+        }
+    }
+
+    /**
      * Generate file DOCX untuk 1 laporan kerusakan.
      */
-    public function generateSingleDocx(LaporanKerusakanDataCenter $laporan): string
+    public function generateSingleDocx(LaporanKerusakanDataCenter $laporan, array $meta = []): string
     {
         $tempDir = storage_path('app/temp');
         if (!is_dir($tempDir)) {
@@ -94,7 +112,15 @@ class SmkiLaporanKerusakanDocxService
                 : Carbon::now()->locale('id')->translatedFormat('d F Y');
         }
 
-        $this->populateDocument($dom, $xpath, [$laporan], $disusun, $mengetahui, $tanggalTtd);
+        $docMeta = [
+            'no_dokumen' => $meta['no_dokumen'] ?? ($laporan->no_dokumen ?: 'F24-SMKI'),
+            'no_revisi' => $meta['no_revisi'] ?? ($laporan->no_revisi ?: '1.0'),
+            'tanggal_berlaku' => $this->formatTanggalIndo(
+                $meta['tanggal_berlaku'] ?? ($laporan->tanggal_berlaku ? Carbon::parse($laporan->tanggal_berlaku)->format('Y-m-d') : null)
+            ),
+        ];
+
+        $this->populateDocument($dom, $xpath, [$laporan], $disusun, $mengetahui, $tanggalTtd, $docMeta);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -142,7 +168,16 @@ class SmkiLaporanKerusakanDocxService
         $mengetahui = $meta['mengetahui'] ?? '……………………………….';
         $tanggalTtd = $meta['tanggal'] ?? Carbon::now()->locale('id')->translatedFormat('d F Y');
 
-        $this->populateDocument($dom, $xpath, $laporans, $disusun, $mengetahui, $tanggalTtd);
+        $firstReport = (is_iterable($laporans) && count($laporans) > 0) ? $laporans[0] : null;
+        $docMeta = [
+            'no_dokumen' => $meta['no_dokumen'] ?? ($firstReport?->no_dokumen ?: 'F24-SMKI'),
+            'no_revisi' => $meta['no_revisi'] ?? ($firstReport?->no_revisi ?: '1.0'),
+            'tanggal_berlaku' => $this->formatTanggalIndo(
+                $meta['tanggal_berlaku'] ?? ($firstReport?->tanggal_berlaku ? Carbon::parse($firstReport->tanggal_berlaku)->format('Y-m-d') : null)
+            ),
+        ];
+
+        $this->populateDocument($dom, $xpath, $laporans, $disusun, $mengetahui, $tanggalTtd, $docMeta);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -159,7 +194,8 @@ class SmkiLaporanKerusakanDocxService
         $laporans,
         string $disusunNama,
         string $mengetahuiNama,
-        string $tanggalTtd
+        string $tanggalTtd,
+        array $docMeta = []
     ): void {
         Carbon::setLocale('id');
 
@@ -169,10 +205,26 @@ class SmkiLaporanKerusakanDocxService
         }
 
         // -------------------------------------------------------------
-        // 1. TABEL 0: Header & Data Laporan
+        // 1. TABEL 0: Header Kop & Data Laporan
         // -------------------------------------------------------------
         $dataTable = $tables->item(0);
         $rows = $xpath->query('w:tr', $dataTable);
+
+        // Isi identitas dokumen pada kop tabel (Row 0..2, Cell 4)
+        $headerMap = [
+            0 => $docMeta['no_dokumen'] ?? null,
+            1 => $docMeta['no_revisi'] ?? null,
+            2 => $docMeta['tanggal_berlaku'] ?? null,
+        ];
+        foreach ($headerMap as $rowIndex => $val) {
+            if (!empty($val) && $rows->length > $rowIndex) {
+                $hRow = $rows->item($rowIndex);
+                $hCells = $xpath->query('w:tc', $hRow);
+                if ($hCells->length > 4) {
+                    $this->writeCellText($dom, $xpath, $hCells->item(4), (string) $val);
+                }
+            }
+        }
 
         // Row 4 adalah baris header (10 kolom)
         // Row 5..8 adalah baris sampel
@@ -236,9 +288,10 @@ class SmkiLaporanKerusakanDocxService
                     $pj = $item->penanggung_jawab_nama ?: ($item->penanggungJawab?->name ?: '-');
 
                     // 9. Status Perbaikan
-                    $statusHuman = match ($item->status) {
-                        'selesai' => 'Selesai',
-                        'sedang_dikerjakan' => 'Sedang Dikerjakan',
+                    $statusLower = strtolower((string) $item->status);
+                    $statusHuman = match ($statusLower) {
+                        'selesai', 'closed' => 'Selesai',
+                        'sedang_dikerjakan', 'diproses' => 'Sedang Dikerjakan',
                         'dibatalkan' => 'Dibatalkan',
                         default => 'Baru Dilaporkan',
                     };

@@ -37,7 +37,7 @@ class SmkiLaporanKerusakanController extends Controller
                 $query->where('status', $request->status);
             }
 
-            // Filter keyword (nama aset, kode, penanggung jawab, pelapor)
+            // Filter keyword (nama aset, kode, penanggung jawab, pelapor, nomor dokumen/laporan)
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
@@ -45,7 +45,8 @@ class SmkiLaporanKerusakanController extends Controller
                         ->orWhere('kode_aset', 'like', "%{$search}%")
                         ->orWhere('penanggung_jawab_nama', 'like', "%{$search}%")
                         ->orWhere('pelapor_nama', 'like', "%{$search}%")
-                        ->orWhere('nomor_laporan', 'like', "%{$search}%");
+                        ->orWhere('nomor_laporan', 'like', "%{$search}%")
+                        ->orWhere('no_dokumen', 'like', "%{$search}%");
                 });
             }
 
@@ -129,6 +130,11 @@ class SmkiLaporanKerusakanController extends Controller
                     'master_pjs' => $masterPjs,
                     'ti_assets' => $tiAssets,
                     'statuses' => ['Baru', 'Diproses', 'Selesai', 'Closed'],
+                    'default_meta' => [
+                        'no_dokumen' => 'F24-SMKI',
+                        'no_revisi' => '1.0',
+                        'tanggal_berlaku' => '2022-01-20',
+                    ],
                 ],
             ]);
         } catch (\Exception $e) {
@@ -145,6 +151,9 @@ class SmkiLaporanKerusakanController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'no_dokumen' => 'nullable|string|max:100',
+            'no_revisi' => 'nullable|string|max:50',
+            'tanggal_berlaku' => 'nullable|date',
             'tanggal' => 'required|date',
             'jam' => 'nullable|string',
             'aset_id' => 'required|exists:data_center_assets,id',
@@ -209,6 +218,9 @@ class SmkiLaporanKerusakanController extends Controller
 
             $report = LaporanKerusakanDataCenter::create([
                 'nomor_laporan' => $nomorLaporan,
+                'no_dokumen' => !empty($validated['no_dokumen']) ? trim($validated['no_dokumen']) : 'F24-SMKI',
+                'no_revisi' => !empty($validated['no_revisi']) ? trim($validated['no_revisi']) : '1.0',
+                'tanggal_berlaku' => $validated['tanggal_berlaku'] ?? '2022-01-20',
                 'tanggal' => $validated['tanggal'],
                 'jam' => $validated['jam'] ?? date('H.i') . ' WIB',
                 'aset_id' => $asset->id,
@@ -289,6 +301,9 @@ class SmkiLaporanKerusakanController extends Controller
         $report = LaporanKerusakanDataCenter::findOrFail($id);
 
         $validated = $request->validate([
+            'no_dokumen' => 'nullable|string|max:100',
+            'no_revisi' => 'nullable|string|max:50',
+            'tanggal_berlaku' => 'nullable|date',
             'tanggal' => 'sometimes|required|date',
             'jam' => 'nullable|string',
             'aset_id' => 'sometimes|required|exists:data_center_assets,id',
@@ -545,7 +560,7 @@ class SmkiLaporanKerusakanController extends Controller
      * Ekspor 1 laporan kerusakan ke format Word FR-024.
      * Hanya dapat diekspor jika laporan telah divalidasi dan disahkan (Closed).
      */
-    public function exportDocx($id)
+    public function exportDocx(Request $request, $id)
     {
         try {
             $report = LaporanKerusakanDataCenter::with(['asset', 'pelapor', 'penanggungJawab', 'supervisor'])
@@ -560,7 +575,11 @@ class SmkiLaporanKerusakanController extends Controller
                 ], 422);
             }
 
-            $docxPath = $this->docxService->generateSingleDocx($report);
+            $docxPath = $this->docxService->generateSingleDocx($report, [
+                'no_dokumen' => $request->input('no_dokumen'),
+                'no_revisi' => $request->input('no_revisi'),
+                'tanggal_berlaku' => $request->input('tanggal_berlaku'),
+            ]);
             $fileName = 'FR-024_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $report->nomor_laporan ?: 'Laporan_Kerusakan') . '.docx';
 
             return response()->download($docxPath, $fileName, [
@@ -605,7 +624,8 @@ class SmkiLaporanKerusakanController extends Controller
                         ->orWhere('kode_aset', 'like', "%{$search}%")
                         ->orWhere('penanggung_jawab_nama', 'like', "%{$search}%")
                         ->orWhere('pelapor_nama', 'like', "%{$search}%")
-                        ->orWhere('nomor_laporan', 'like', "%{$search}%");
+                        ->orWhere('nomor_laporan', 'like', "%{$search}%")
+                        ->orWhere('no_dokumen', 'like', "%{$search}%");
                 });
             }
 
@@ -621,6 +641,9 @@ class SmkiLaporanKerusakanController extends Controller
                 'disusun' => 'Teknisi Data Center',
                 'mengetahui' => $user ? $user->name : 'Kepala Bidang APTIKA',
                 'tanggal' => now()->locale('id')->translatedFormat('d F Y'),
+                'no_dokumen' => $request->input('no_dokumen'),
+                'no_revisi' => $request->input('no_revisi'),
+                'tanggal_berlaku' => $request->input('tanggal_berlaku'),
             ]);
             $fileName = 'FR-024_Rekapitulasi_Laporan_Kerusakan_' . date('Ymd_His') . '.docx';
 
@@ -636,4 +659,3 @@ class SmkiLaporanKerusakanController extends Controller
         }
     }
 }
-
