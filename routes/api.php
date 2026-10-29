@@ -1668,6 +1668,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.rencana-audit.destroy',
                 ]);
 
+            // Formulir Tahunan Audit Internal (FR-008)
+            Route::get('laporan-audit-tahunan/lookup', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'lookup'])->name('smki.laporan-audit-tahunan.lookup');
+            Route::post('laporan-audit-tahunan/store-all', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'storeAll'])->name('smki.laporan-audit-tahunan.store-all');
+            Route::get('laporan-audit-tahunan/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'exportDocx'])->name('smki.laporan-audit-tahunan.export-docx');
+            Route::get('laporan-audit-tahunan', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'index'])->name('smki.laporan-audit-tahunan.index');
+            Route::get('laporan-audit-tahunan/{id}', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'show'])->name('smki.laporan-audit-tahunan.show');
+            Route::delete('laporan-audit-tahunan/{id}', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'destroy'])->name('smki.laporan-audit-tahunan.destroy');
+
             // Laporan Audit Internal SMKI (FR-006)
             Route::get('laporan-audit/lookup', [\App\Http\Controllers\Smki\SmkiLaporanAuditController::class, 'lookup'])
                 ->name('smki.laporan-audit.lookup');

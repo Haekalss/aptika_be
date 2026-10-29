@@ -14,6 +14,9 @@ class LaporanKerusakanDataCenter extends Model
 
     protected $fillable = [
         'nomor_laporan',
+        'no_dokumen',
+        'no_revisi',
+        'tanggal_berlaku',
         'tanggal',
         'jam',
         'aset_id',
@@ -38,6 +41,7 @@ class LaporanKerusakanDataCenter extends Model
 
     protected $casts = [
         'tanggal' => 'date:Y-m-d',
+        'tanggal_berlaku' => 'date:Y-m-d',
         'target_selesai' => 'date:Y-m-d',
         'tanggal_selesai_aktual' => 'datetime',
         'validated_at' => 'datetime',
