@@ -64,6 +64,22 @@ class TteResolverController extends Controller
         $pegawai = $this->resolver->find($nip, $nama);
 
         if ($pegawai === null) {
+            if ($nama !== '') {
+                $user = \App\Models\User::where('name', 'like', "%{$nama}%")->first();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Spesimen ditemukan.',
+                    'data' => [
+                        'source' => $user ? 'user' : 'nama',
+                        'id' => $user?->id ?? 0,
+                        'nama' => $user ? $user->name : $nama,
+                        'nip' => $nip ?: ($user?->nip ?? '-'),
+                        'jabatan' => $user?->position ?? 'Pengelola Sistem Informasi / SMKI',
+                        'unit' => null,
+                    ],
+                ], 200);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => null,

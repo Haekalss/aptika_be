@@ -13,6 +13,8 @@ use App\Services\SmkiLaporanKerusakanDocxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
 
 class SmkiLaporanKerusakanController extends Controller
 {
@@ -95,6 +97,13 @@ class SmkiLaporanKerusakanController extends Controller
     public function lookup()
     {
         try {
+            // Pastikan aset selalu terisi (Sinkronisasi dari DaftarAsetTi atau seed default)
+            DataCenterAsset::ensureDefaultAssets();
+            $tiCount = DaftarAsetTi::count();
+            if ($tiCount > 0 && DataCenterAsset::count() < $tiCount) {
+                DataCenterAsset::syncFromDaftarAsetTi();
+            }
+
             $assets = DataCenterAsset::orderBy('nama_aset', 'asc')->get();
             $users = User::select('id', 'name', 'email', 'role')->orderBy('name', 'asc')->get();
             
@@ -156,7 +165,7 @@ class SmkiLaporanKerusakanController extends Controller
             'tanggal_berlaku' => 'nullable|date',
             'tanggal' => 'required|date',
             'jam' => 'nullable|string',
-            'aset_id' => 'required|exists:data_center_assets,id',
+            'aset_id' => 'required',
             'jenis_kerusakan' => 'required|string',
             'penyebab' => 'nullable|string',
             'uraian_tindakan' => 'nullable|string',
@@ -170,7 +179,19 @@ class SmkiLaporanKerusakanController extends Controller
 
         DB::beginTransaction();
         try {
-            $asset = DataCenterAsset::findOrFail($validated['aset_id']);
+            $asset = DataCenterAsset::find($validated['aset_id']);
+            if (!$asset) {
+                $ti = DaftarAsetTi::find($validated['aset_id']);
+                if ($ti) {
+                    $asset = DataCenterAsset::syncFromDaftarAsetTi($ti);
+                }
+            }
+            if (!$asset) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Aset yang dipilih tidak ditemukan di master aset.',
+                ], 422);
+            }
             $user = $request->user();
             $isAdmin = $user && ($user->role === 'admin' || str_contains(strtolower($user->email ?? ''), 'admin'));
 
@@ -216,11 +237,23 @@ class SmkiLaporanKerusakanController extends Controller
                 $pelaporNama = $validated['pelapor_nama'];
             }
 
-            $report = LaporanKerusakanDataCenter::create([
+            // Cek ketersediaan kolom no_dokumen (kompatibilitas migrasi DB)
+            $hasDocMeta = Schema::hasColumn('laporan_kerusakan_data_centers', 'no_dokumen');
+            if (!$hasDocMeta) {
+                try {
+                    Schema::table('laporan_kerusakan_data_centers', function (Blueprint $table) {
+                        $table->string('no_dokumen', 100)->default('F24-SMKI')->nullable();
+                        $table->string('no_revisi', 50)->default('1.0')->nullable();
+                        $table->date('tanggal_berlaku')->nullable();
+                    });
+                    $hasDocMeta = true;
+                } catch (\Throwable $e) {
+                    $hasDocMeta = false;
+                }
+            }
+
+            $reportData = [
                 'nomor_laporan' => $nomorLaporan,
-                'no_dokumen' => !empty($validated['no_dokumen']) ? trim($validated['no_dokumen']) : 'F24-SMKI',
-                'no_revisi' => !empty($validated['no_revisi']) ? trim($validated['no_revisi']) : '1.0',
-                'tanggal_berlaku' => $validated['tanggal_berlaku'] ?? '2022-01-20',
                 'tanggal' => $validated['tanggal'],
                 'jam' => $validated['jam'] ?? date('H.i') . ' WIB',
                 'aset_id' => $asset->id,
@@ -238,7 +271,15 @@ class SmkiLaporanKerusakanController extends Controller
                 'supervisor_id' => $spUser ? $spUser->id : ($validated['supervisor_id'] ?? null),
                 'supervisor_nama' => $supervisorNama,
                 'status' => $status,
-            ]);
+            ];
+
+            if ($hasDocMeta) {
+                $reportData['no_dokumen'] = !empty($validated['no_dokumen']) ? trim($validated['no_dokumen']) : 'F24-SMKI';
+                $reportData['no_revisi'] = !empty($validated['no_revisi']) ? trim($validated['no_revisi']) : '1.0';
+                $reportData['tanggal_berlaku'] = $validated['tanggal_berlaku'] ?? '2022-01-20';
+            }
+
+            $report = LaporanKerusakanDataCenter::create($reportData);
 
             // Update status operasional aset jika rusak
             if ($status !== 'Closed' && $status !== 'Selesai') {
@@ -306,7 +347,7 @@ class SmkiLaporanKerusakanController extends Controller
             'tanggal_berlaku' => 'nullable|date',
             'tanggal' => 'sometimes|required|date',
             'jam' => 'nullable|string',
-            'aset_id' => 'sometimes|required|exists:data_center_assets,id',
+            'aset_id' => 'sometimes|required',
             'jenis_kerusakan' => 'sometimes|required|string',
             'penyebab' => 'nullable|string',
             'uraian_tindakan' => 'nullable|string',
@@ -338,7 +379,14 @@ class SmkiLaporanKerusakanController extends Controller
 
             if (!empty($validated['aset_id']) && $validated['aset_id'] != $report->aset_id) {
                 $asset = DataCenterAsset::find($validated['aset_id']);
+                if (!$asset) {
+                    $ti = DaftarAsetTi::find($validated['aset_id']);
+                    if ($ti) {
+                        $asset = DataCenterAsset::syncFromDaftarAsetTi($ti);
+                    }
+                }
                 if ($asset) {
+                    $report->aset_id = $asset->id;
                     $report->nama_aset = $asset->nama_aset;
                     $report->kode_aset = $asset->kode_aset;
                     $report->lokasi_rak = $asset->lokasi_rak;
@@ -362,6 +410,10 @@ class SmkiLaporanKerusakanController extends Controller
 
             if ($newStatus === 'Selesai' && $oldStatus !== 'Selesai') {
                 $report->tanggal_selesai_aktual = now();
+            }
+
+            if (!Schema::hasColumn('laporan_kerusakan_data_centers', 'no_dokumen')) {
+                unset($validated['no_dokumen'], $validated['no_revisi'], $validated['tanggal_berlaku']);
             }
 
             $report->update($validated);
@@ -579,6 +631,10 @@ class SmkiLaporanKerusakanController extends Controller
                 'no_dokumen' => $request->input('no_dokumen'),
                 'no_revisi' => $request->input('no_revisi'),
                 'tanggal_berlaku' => $request->input('tanggal_berlaku'),
+                'disusun_nama' => $request->query('disusun_nama'),
+                'disusun_nip' => $request->query('disusun_nip'),
+                'mengetahui_nama' => $request->query('mengetahui_nama'),
+                'mengetahui_nip' => $request->query('mengetahui_nip'),
             ]);
             $fileName = 'FR-024_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $report->nomor_laporan ?: 'Laporan_Kerusakan') . '.docx';
 

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\SmkiFormulirHardening;
+use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\TteResolverService;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
@@ -12,6 +14,7 @@ use ZipArchive;
 
 class SmkiHardeningDocxService
 {
+    use FillsDocxTemplate;
     /**
      * Cari path template dokumen FR-047 Formulir Hardening Pengecekan Aset.
      */
@@ -171,7 +174,10 @@ class SmkiHardeningDocxService
 
         $kotaTanggal = ($form->kota ?: 'Bandung') . ', ' . $tglPengesahan;
         $auditorName = $form->nama_auditor ?: 'Tim IT Security';
+        $auditorRawNip = $form->nip_auditor ?: '';
         $auditorNip  = $form->nip_auditor ? 'NIP. ' . $form->nip_auditor : '';
+
+        $ttePath = ($auditorRawNip === '' && $auditorName === '') ? null : app(TteResolverService::class)->imagePath($auditorRawNip, $auditorName);
 
         if ($tables->length >= 2) {
             $table1 = $tables->item(1);
@@ -299,9 +305,13 @@ class SmkiHardeningDocxService
           </w:rPr>
           <w:t>Specimen pembuat,</w:t>
         </w:r>
-        <w:r>
-          <w:br/><w:br/><w:br/>
-        </w:r>
+        ' . ($ttePath !== null ? '' : '<w:r><w:br/><w:br/><w:br/></w:r>') . '
+      </w:p>
+      <w:p>
+        <w:pPr>
+          <w:jc w:val="left"/>
+          <w:spacing w:before="0" w:after="0"/>
+        </w:pPr>
         <w:r>
           <w:rPr>
             <w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>
@@ -323,6 +333,26 @@ class SmkiHardeningDocxService
                 $sectPr->parentNode->insertBefore($frag, $sectPr);
             } else {
                 $dom->getElementsByTagName('body')->item(0)->appendChild($frag);
+            }
+
+            if ($ttePath !== null) {
+                $auditorTarget = null;
+                foreach ($xpath->query('//w:tc//w:p') as $p) {
+                    if (str_contains($p->textContent, '( ' . $auditorName . ' )')) {
+                        $auditorTarget = $p;
+                        break;
+                    }
+                }
+                if ($auditorTarget) {
+                    $imgPara = $this->tteImageParagraph($dom, 'left');
+                    if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgPara, $ttePath, 200)) {
+                        $auditorTarget->parentNode->insertBefore($imgPara, $auditorTarget);
+                        // Hapus teks nama manual di bawahnya karena nama sudah tercantum resmi di dalam kotak spesimen TTE
+                        if ($auditorTarget->parentNode) {
+                            $auditorTarget->parentNode->removeChild($auditorTarget);
+                        }
+                    }
+                }
             }
         }
 
@@ -506,6 +536,25 @@ class SmkiHardeningDocxService
             $r3->appendChild($t3);
             $p->appendChild($r3);
         }
+    }
+
+    /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
+    protected function tteImageParagraph(DOMDocument $dom, ?string $align = 'left'): DOMElement
+    {
+        $p = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:p');
+        $pPr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:pPr');
+        if ($align !== null) {
+            $jc = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:jc');
+            $jc->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:val', $align);
+            $pPr->appendChild($jc);
+        }
+        $spacing = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:spacing');
+        $spacing->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:before', '40');
+        $spacing->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:after', '40');
+        $pPr->appendChild($spacing);
+        $p->appendChild($pPr);
+
+        return $p;
     }
 
     /**
