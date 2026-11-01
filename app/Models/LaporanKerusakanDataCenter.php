@@ -47,6 +47,21 @@ class LaporanKerusakanDataCenter extends Model
         'validated_at' => 'datetime',
     ];
 
+    public function getNoDokumenAttribute($value)
+    {
+        return !empty($value) ? $value : 'F24-SMKI';
+    }
+
+    public function getNoRevisiAttribute($value)
+    {
+        return !empty($value) ? $value : '1.0';
+    }
+
+    public function getTanggalBerlakuAttribute($value)
+    {
+        return !empty($value) ? $value : '2022-01-20';
+    }
+
     public function asset()
     {
         return $this->belongsTo(DataCenterAsset::class, 'aset_id');

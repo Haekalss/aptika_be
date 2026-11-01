@@ -3,14 +3,19 @@
 namespace App\Services;
 
 use App\Models\LaporanKerusakanDataCenter;
+use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\TteResolverService;
 use Carbon\Carbon;
 use DOMDocument;
+use DOMElement;
+use DOMNode;
 use DOMXPath;
 use Exception;
 use ZipArchive;
 
 class SmkiLaporanKerusakanDocxService
 {
+    use FillsDocxTemplate;
     /**
      * Dapatkan path template FR-024.
      */
@@ -90,13 +95,15 @@ class SmkiLaporanKerusakanDocxService
 
         // Logika Tanda Tangan Realistis (SMKI ISO 27001):
         // 1. Disusun: Selalu ditandatangani oleh Teknisi Pelapor
-        $disusun = $laporan->pelapor_nama ?: ($laporan->pelapor?->name ?: 'Teknisi Data Center');
+        $disusun = $meta['disusun_nama'] ?? ($laporan->pelapor_nama ?: ($laporan->pelapor?->name ?: 'Teknisi Data Center'));
+        $disusunNip = $meta['disusun_nip'] ?? '';
 
         // 2. Mengetahui: Ditandatangani oleh Supervisor / Pejabat Penyetuju
         $isClosed = ($laporan->status === 'Closed' || !empty($laporan->validated_at));
         if ($isClosed) {
             // Sudah sah dan divalidasi oleh Supervisor
-            $mengetahui = $laporan->supervisor_nama ?: ($laporan->supervisor?->name ?: 'Supervisor Data Center');
+            $mengetahui = $meta['mengetahui_nama'] ?? ($laporan->supervisor_nama ?: ($laporan->supervisor?->name ?: 'Supervisor Data Center'));
+            $mengetahuiNip = $meta['mengetahui_nip'] ?? '';
             $tanggalTtd = $laporan->validated_at
                 ? Carbon::parse($laporan->validated_at)->locale('id')->translatedFormat('d F Y')
                 : ($laporan->tanggal ? Carbon::parse($laporan->tanggal)->locale('id')->translatedFormat('d F Y') : Carbon::now()->locale('id')->translatedFormat('d F Y'));
@@ -107,6 +114,7 @@ class SmkiLaporanKerusakanDocxService
             } else {
                 $mengetahui = '……………………………….';
             }
+            $mengetahuiNip = '';
             $tanggalTtd = $laporan->tanggal
                 ? Carbon::parse($laporan->tanggal)->locale('id')->translatedFormat('d F Y')
                 : Carbon::now()->locale('id')->translatedFormat('d F Y');
@@ -120,7 +128,7 @@ class SmkiLaporanKerusakanDocxService
             ),
         ];
 
-        $this->populateDocument($dom, $xpath, [$laporan], $disusun, $mengetahui, $tanggalTtd, $docMeta);
+        $this->populateDocument($zip, $dom, $xpath, [$laporan], $disusun, $disusunNip, $mengetahui, $mengetahuiNip, $tanggalTtd, $docMeta);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -164,8 +172,10 @@ class SmkiLaporanKerusakanDocxService
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
 
-        $disusun = $meta['disusun'] ?? '……………………………….';
-        $mengetahui = $meta['mengetahui'] ?? '……………………………….';
+        $disusun = $meta['disusun_nama'] ?? ($meta['disusun'] ?? '……………………………….');
+        $disusunNip = $meta['disusun_nip'] ?? '';
+        $mengetahui = $meta['mengetahui_nama'] ?? ($meta['mengetahui'] ?? '……………………………….');
+        $mengetahuiNip = $meta['mengetahui_nip'] ?? '';
         $tanggalTtd = $meta['tanggal'] ?? Carbon::now()->locale('id')->translatedFormat('d F Y');
 
         $firstReport = (is_iterable($laporans) && count($laporans) > 0) ? $laporans[0] : null;
@@ -177,7 +187,7 @@ class SmkiLaporanKerusakanDocxService
             ),
         ];
 
-        $this->populateDocument($dom, $xpath, $laporans, $disusun, $mengetahui, $tanggalTtd, $docMeta);
+        $this->populateDocument($zip, $dom, $xpath, $laporans, $disusun, $disusunNip, $mengetahui, $mengetahuiNip, $tanggalTtd, $docMeta);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -189,11 +199,14 @@ class SmkiLaporanKerusakanDocxService
      * Mengisi tabel data dan tanda tangan ke dalam XML dokumen FR-024.
      */
     private function populateDocument(
+        ZipArchive $zip,
         DOMDocument $dom,
         DOMXPath $xpath,
         $laporans,
         string $disusunNama,
+        string $disusunNip,
         string $mengetahuiNama,
+        string $mengetahuiNip,
         string $tanggalTtd,
         array $docMeta = []
     ): void {
@@ -352,16 +365,93 @@ class SmkiLaporanKerusakanDocxService
                 // Cell 0: Disusun
                 if ($cells1->length > 0) {
                     $cellDisusun = $cells1->item(0);
-                    $this->replaceTextInCell($xpath, $cellDisusun, '(………………………………..)', '(' . $disusunNama . ')');
+                    $this->fillSignatureInCell($zip, $dom, $xpath, $cellDisusun, $disusunNip, $disusunNama);
                 }
 
                 // Cell 2: Mengetahui
                 if ($cells1->length > 2) {
                     $cellMengetahui = $cells1->item(2);
-                    $this->replaceTextInCell($xpath, $cellMengetahui, '(………………………………..)', '(' . $mengetahuiNama . ')');
+                    $this->fillSignatureInCell($zip, $dom, $xpath, $cellMengetahui, $mengetahuiNip, $mengetahuiNama);
                 }
             }
         }
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE ke dalam sel tanda tangan dan ganti nama.
+     */
+    private function fillSignatureInCell(
+        ZipArchive $zip,
+        DOMDocument $dom,
+        DOMXPath $xpath,
+        DOMNode $cell,
+        string $nip,
+        string $nama
+    ): void {
+        $nama = trim($nama);
+        $nip = trim($nip);
+
+        $target = null;
+        foreach ($xpath->query('.//w:p', $cell) as $p) {
+            if (strpos(trim($p->textContent), '(…') !== false || strpos(trim($p->textContent), '(...') !== false) {
+                $target = $p;
+                break;
+            }
+        }
+
+        // Coba cari gambar spesimen dari master pegawai atau akun pengguna
+        $path = ($nip === '' && $nama === '') ? null : app(TteResolverService::class)->imagePath($nip, $nama);
+
+        if ($target) {
+            if ($path !== null) {
+                // Hapus paragraf kosong di atas target agar posisi spesimen rapi
+                $emptyParas = [];
+                foreach ($xpath->query('.//w:p', $cell) as $p) {
+                    if ($p !== $target && trim($p->textContent) === '') {
+                        $emptyParas[] = $p;
+                    }
+                }
+                foreach ($emptyParas as $ep) {
+                    if ($ep->parentNode) {
+                        $ep->parentNode->removeChild($ep);
+                    }
+                }
+
+                $imgPara = $this->tteImageParagraph($dom);
+                if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgPara, $path, 200)) {
+                    $target->parentNode->insertBefore($imgPara, $target);
+                    // Hapus teks nama manual di bawahnya karena nama sudah tercantum resmi di dalam kotak spesimen TTE
+                    if ($target->parentNode) {
+                        $target->parentNode->removeChild($target);
+                    }
+                } else {
+                    $this->setParagraphText($dom, $xpath, $target, '(' . ($nama ?: '………………………………..') . ')', 'center');
+                }
+            } else {
+                $this->setParagraphText($dom, $xpath, $target, '(' . ($nama ?: '………………………………..') . ')', 'center');
+            }
+        } else {
+            $this->replaceTextInCell($xpath, $cell, '(………………………………..)', '(' . ($nama ?: '………………………………..') . ')');
+        }
+    }
+
+    /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
+    private function tteImageParagraph(DOMDocument $dom, ?string $align = 'center'): DOMElement
+    {
+        $p = $dom->createElementNS(self::W_NS, 'w:p');
+        $pPr = $dom->createElementNS(self::W_NS, 'w:pPr');
+        if ($align !== null) {
+            $jc = $dom->createElementNS(self::W_NS, 'w:jc');
+            $jc->setAttributeNS(self::W_NS, 'w:val', $align);
+            $pPr->appendChild($jc);
+        }
+        $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+        $spacing->setAttributeNS(self::W_NS, 'w:before', '60');
+        $spacing->setAttributeNS(self::W_NS, 'w:after', '60');
+        $pPr->appendChild($spacing);
+        $p->appendChild($pPr);
+
+        return $p;
     }
 
     /**

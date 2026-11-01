@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\SmkiLaporanAuditTahunan;
+use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\TteResolverService;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMElement;
+use DOMNode;
 use DOMXPath;
 use Exception;
 use ZipArchive;
@@ -17,6 +20,7 @@ use ZipArchive;
  */
 class SmkiLaporanAuditTahunanDocxService
 {
+    use FillsDocxTemplate;
     private const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     private const MIN_ROWS = 9;
 
@@ -34,7 +38,7 @@ class SmkiLaporanAuditTahunanDocxService
         throw new Exception('Template dokumen FR-008 tidak ditemukan di resources/templates.');
     }
 
-    public function generate(SmkiLaporanAuditTahunan $laporan): string
+    public function generate(SmkiLaporanAuditTahunan $laporan, array $overrides = []): string
     {
         $laporan->loadMissing(['timAuditor', 'objekAudit.klausul', 'objekAudit.jadwal']);
 
@@ -72,7 +76,7 @@ class SmkiLaporanAuditTahunanDocxService
             throw new Exception('word/document.xml tidak ditemukan pada template FR-008.');
         }
         [$dom, $xp] = $this->load($xml);
-        $this->fill($dom, $xp, $laporan);
+        $this->fill($dom, $xp, $laporan, $zip, $overrides);
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
 
@@ -204,7 +208,7 @@ class SmkiLaporanAuditTahunanDocxService
         }
     }
 
-    private function fill(DOMDocument $dom, DOMXPath $xp, SmkiLaporanAuditTahunan $l): void
+    private function fill(DOMDocument $dom, DOMXPath $xp, SmkiLaporanAuditTahunan $l, ZipArchive $zip, array $overrides = []): void
     {
         $outer = $xp->query('//w:body/w:tbl')->item(0);
         if (!$outer) {
@@ -354,27 +358,89 @@ class SmkiLaporanAuditTahunanDocxService
             $sig = $rows[$sigLabelIdx + 1];
             $cells = $xp->query('./w:tc', $sig);
             $pairs = [
-                0 => [$l->disahkan_oleh, $l->jabatan_pengesah],
-                1 => [$l->disusun_oleh, $l->jabatan_penyusun],
+                0 => [
+                    $overrides['disahkan_oleh'] ?? $l->disahkan_oleh,
+                    $overrides['disahkan_nip'] ?? '',
+                    $l->jabatan_pengesah
+                ],
+                1 => [
+                    $overrides['disusun_oleh'] ?? $l->disusun_oleh,
+                    $overrides['disusun_nip'] ?? '',
+                    $l->jabatan_penyusun
+                ],
             ];
-            foreach ($pairs as $ci => [$nama, $jabatan]) {
+            foreach ($pairs as $ci => [$nama, $nip, $jabatan]) {
                 $cell = $cells->item($ci);
                 if (!$cell) {
                     continue;
                 }
-                $paras = $xp->query('./w:p', $cell);
-                foreach ($paras as $pi => $p) {
+                $nama = trim((string) $nama);
+                $nip = trim((string) $nip);
+
+                $target = null;
+                $paras = iterator_to_array($xp->query('./w:p', $cell));
+                foreach ($paras as $p) {
                     $t = trim($this->text($xp, $p));
                     if (str_contains($t, '(…')) {
-                        $this->setPText($dom, $xp, $p, '(' . ($nama ?: '…………………………………….') . ')');
+                        $target = $p;
+                        break;
                     }
                 }
-                if ($jabatan && $paras->length > 0) {
-                    $this->setPText($dom, $xp, $paras->item(0), (string) $jabatan, $tplData);
-                    $this->centerP($dom, $xp, $paras->item(0));
+
+                if ($target) {
+                    $path = ($nip === '' && $nama === '') ? null : app(TteResolverService::class)->imagePath($nip, $nama);
+                    if ($path !== null) {
+                        // Bersihkan baris-baris kosong sebelum target
+                        $prev = $target->previousSibling;
+                        while ($prev instanceof DOMElement
+                            && $prev->localName === 'p'
+                            && trim($this->text($xp, $prev)) === ''
+                            && !$this->hasChild($prev, 'drawing')) {
+                            $node = $prev;
+                            $prev = $prev->previousSibling;
+                            $node->parentNode->removeChild($node);
+                        }
+
+                        $imgPara = $this->tteImageParagraph($dom);
+                        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 200)) {
+                            $target->parentNode->insertBefore($imgPara, $target);
+                            // Hapus teks nama manual di bawahnya karena nama sudah tercantum resmi di dalam kotak spesimen TTE
+                            if ($target->parentNode) {
+                                $target->parentNode->removeChild($target);
+                            }
+                        } else {
+                            $this->setPText($dom, $xp, $target, '(' . ($nama ?: '…………………………………….') . ')');
+                        }
+                    } else {
+                        $this->setPText($dom, $xp, $target, '(' . ($nama ?: '…………………………………….') . ')');
+                    }
+                }
+
+                if ($jabatan && count($paras) > 0) {
+                    $this->setPText($dom, $xp, $paras[0], (string) $jabatan, $tplData);
+                    $this->centerP($dom, $xp, $paras[0]);
                 }
             }
         }
+    }
+
+    /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
+    private function tteImageParagraph(DOMDocument $dom, ?string $align = 'center'): DOMElement
+    {
+        $p = $dom->createElementNS(self::W, 'w:p');
+        $pPr = $dom->createElementNS(self::W, 'w:pPr');
+        if ($align !== null) {
+            $jc = $dom->createElementNS(self::W, 'w:jc');
+            $jc->setAttributeNS(self::W, 'w:val', $align);
+            $pPr->appendChild($jc);
+        }
+        $spacing = $dom->createElementNS(self::W, 'w:spacing');
+        $spacing->setAttributeNS(self::W, 'w:before', '60');
+        $spacing->setAttributeNS(self::W, 'w:after', '60');
+        $pPr->appendChild($spacing);
+        $p->appendChild($pPr);
+
+        return $p;
     }
 
     /** Gabungkan semua sel pada satu baris menjadi satu sel selebar $span kolom. */

@@ -13,6 +13,7 @@ use App\Models\AsetTiSpesifikasi;
 use App\Models\AsetTiPemanfaatan;
 use App\Models\AsetTiPenyedia;
 use App\Models\AsetTiPenanggungJawab;
+use App\Models\DataCenterAsset;
 use App\Services\DaftarAsetTiExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -279,6 +280,13 @@ class DaftarAsetTiController extends Controller
             'user:id,name,email',
         ]);
 
+        // Sinkronisasi otomatis ke Data Center Asset (Opsi 2 - Single Source of Truth)
+        try {
+            DataCenterAsset::syncFromDaftarAsetTi($aset);
+        } catch (\Exception $e) {
+            \Log::warning('Gagal auto-sync ke DataCenterAsset: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Data aset TI berhasil ditambahkan ke inventaris.',
@@ -411,6 +419,13 @@ class DaftarAsetTiController extends Controller
             'user:id,name,email',
         ]);
 
+        // Sinkronisasi otomatis ke Data Center Asset (Opsi 2 - Single Source of Truth)
+        try {
+            DataCenterAsset::syncFromDaftarAsetTi($aset);
+        } catch (\Exception $e) {
+            \Log::warning('Gagal auto-sync ke DataCenterAsset: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Data aset TI berhasil diperbarui.',
@@ -425,6 +440,10 @@ class DaftarAsetTiController extends Controller
     {
         $aset = DaftarAsetTi::findOrFail($id);
         $aset->delete();
+
+        if (!empty($aset->kode)) {
+            DataCenterAsset::where('kode_aset', $aset->kode)->delete();
+        }
 
         return response()->json([
             'success' => true,

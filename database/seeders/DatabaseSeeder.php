@@ -48,6 +48,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AsetTiMasterSeeder::class,
             DaftarAsetTiSeeder::class,
+            DataCenterSeeder::class,
             SmkiSoftwareStandarSeeder::class,
             SmkiFormulirHardeningSeeder::class,
         ]);
