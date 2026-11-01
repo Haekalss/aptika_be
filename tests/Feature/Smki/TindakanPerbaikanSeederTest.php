@@ -33,6 +33,7 @@ class TindakanPerbaikanSeederTest extends TestCase
             '2026_09_28_000001_create_rencana_audit_tables.php',
             '2026_09_30_000001_create_smki_laporan_audit_tables.php',
             '2026_10_14_000001_create_smki_tindakan_perbaikan_tables.php',
+            '2026_11_01_000001_add_document_metadata_to_smki_tindakan_perbaikans.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -95,7 +96,7 @@ class TindakanPerbaikanSeederTest extends TestCase
                 }
 
                 if ($record->verifikasi === 'Close') {
-                    $this->assertFalse(Gate::forUser($admin)->allows('update', $record));
+                    $this->assertTrue(Gate::forUser($admin)->allows('update', $record));
                     $this->assertNotEmpty($record->akar_masalah);
                     $this->assertSame(Auditor::first()->nama_auditor, $record->auditor_nama);
                 }

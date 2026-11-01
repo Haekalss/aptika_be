@@ -37,6 +37,20 @@ class SmkiTindakanPerbaikanDocxService
                 throw new RuntimeException('Gagal membuka salinan template FR-009.');
             }
             $opened = true;
+            $header = $this->parseXml($zip->getFromName('word/header1.xml'));
+            $headerXpath = $this->xpath($header);
+            $metadata = [
+                $report->nomor_dokumen ?? SmkiTindakanPerbaikan::TEMPLATE['code'],
+                $report->nomor_revisi ?? SmkiTindakanPerbaikan::TEMPLATE['revision'],
+                $this->formatDate($report->tanggal_berlaku ?? SmkiTindakanPerbaikan::TEMPLATE['effective_date']),
+            ];
+            foreach ($metadata as $index => $value) {
+                $row = $index + 1;
+                $this->writeParagraph($header, $headerXpath, $headerXpath->query("/w:hdr/w:tbl/w:tr[$row]/w:tc[last()]/w:p[1]")->item(0), ': '.$value);
+            }
+            if (! $zip->addFromString('word/header1.xml', $header->saveXML())) {
+                throw new RuntimeException('Gagal menyimpan identitas dokumen DOCX.');
+            }
             $dom = $this->parseXml($zip->getFromName('word/document.xml'));
             $xpath = $this->xpath($dom);
             $tables = $xpath->query('/w:document/w:body/w:tbl');

@@ -19,6 +19,7 @@ class TindakanPerbaikanService
     {
         return $this->transaction(function () use ($data, $user) {
             Gate::forUser($user)->authorize('create', SmkiTindakanPerbaikan::class);
+            $data['tanggal_berlaku'] ??= now('Asia/Jakarta')->toDateString();
             if (! isset($data['dilaporkan_oleh_id']) && empty($data['dilaporkan_oleh_nama'])) {
                 $data['dilaporkan_oleh_id'] = $user->id;
             }
@@ -201,7 +202,7 @@ class TindakanPerbaikanService
             'dilaporkan_oleh_nama' => ['required', 'string'],
             'sumber_codes' => ['required', 'array', 'min:1'],
             'sumber_codes.*' => [Rule::in(array_keys(SmkiTindakanPerbaikan::SOURCES))],
-            'status_temuan' => ['required', Rule::in(['Minor'])],
+            'status_temuan' => ['required', Rule::in(SmkiTindakanPerbaikan::FINDING_STATUSES)],
             'deskripsi' => ['required', 'string'],
             'items.*.uraian' => ['required', 'string'],
             'items.*.pic_nama' => ['required', 'string'],

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Documents\DocxToPdfService;
 use App\Services\Smki\SmkiTindakanPerbaikanDocxService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -44,6 +45,7 @@ class TindakanPerbaikanApiTest extends TestCase
             '2026_09_28_000001_create_rencana_audit_tables.php',
             '2026_09_30_000001_create_smki_laporan_audit_tables.php',
             '2026_10_14_000001_create_smki_tindakan_perbaikan_tables.php',
+            '2026_11_01_000001_add_document_metadata_to_smki_tindakan_perbaikans.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
@@ -89,6 +91,68 @@ class TindakanPerbaikanApiTest extends TestCase
             'catatan_verifikasi' => 'Pemeriksaan dilaksanakan.'];
     }
 
+    private function recordInState(string $state): array
+    {
+        if ($state === 'draft') {
+            return $this->draft();
+        }
+        $record = $this->submitted();
+        if (in_array($state, ['Open', 'Close'], true)) {
+            return $this->actingAs($this->admin, 'sanctum')->postJson(self::URL."/{$record['id']}/verify", $this->verification($state))
+                ->assertOk()->json('data');
+        }
+
+        return $record;
+    }
+
+    public function test_owner_and_admin_can_update_and_soft_delete_every_report_and_verification_state(): void
+    {
+        foreach ([$this->owner, $this->admin] as $actor) {
+            foreach (['draft', 'submitted', 'Open', 'Close'] as $state) {
+                $record = $this->recordInState($state);
+                $this->actingAs($actor, 'sanctum')->getJson(self::URL."/{$record['id']}")->assertOk()
+                    ->assertJsonPath('data.permissions.can_update', true)->assertJsonPath('data.permissions.can_delete', true);
+                $history = $record['verifications'];
+                $this->putJson(self::URL."/{$record['id']}", ['version' => $record['version'] + 1, 'deskripsi' => 'Stale'])
+                    ->assertConflict();
+                $changed = $this->putJson(self::URL."/{$record['id']}", ['version' => $record['version'], 'deskripsi' => 'Konten direvisi'])
+                    ->assertOk()->assertJsonPath('data.status', 'draft')->assertJsonPath('data.verifikasi', null)
+                    ->assertJsonPath('data.tanggal_verifikasi', null)->assertJsonPath('data.catatan_verifikasi', null)
+                    ->assertJsonPath('data.verified_by', null)->assertJsonPath('data.version', $record['version'] + 1)
+                    ->assertJsonPath('data.deskripsi', 'Konten direvisi')->json('data');
+                $this->assertSame($history, $changed['verifications']);
+
+                $deleting = $this->recordInState($state);
+                $this->actingAs($actor, 'sanctum')->deleteJson(self::URL."/{$deleting['id']}", ['version' => $deleting['version'] + 1])
+                    ->assertConflict();
+                $this->deleteJson(self::URL."/{$deleting['id']}", ['version' => $deleting['version']])->assertNoContent();
+                $this->assertSoftDeleted('smki_tindakan_perbaikans', ['id' => $deleting['id']]);
+                $deleted = SmkiTindakanPerbaikan::withTrashed()->findOrFail($deleting['id']);
+                $this->assertSame(count($deleting['items']), $deleted->items()->count());
+                $this->assertSame(count($deleting['verifications']), $deleted->verifications()->count());
+                $this->getJson(self::URL."/{$deleting['id']}")->assertNotFound();
+                $this->putJson(self::URL."/{$deleting['id']}", ['version' => $deleting['version'], 'deskripsi' => 'Restore'])
+                    ->assertNotFound();
+            }
+        }
+    }
+
+    public function test_closed_reports_still_reject_other_owners_other_bidangs_inactive_and_unknown_roles(): void
+    {
+        $record = $this->recordInState('Close');
+        $inactive = User::factory()->create(['bidang_id' => 3, 'role' => 'admin', 'is_active' => 0]);
+        $unknown = User::factory()->create(['bidang_id' => 3, 'role' => 'guest', 'is_active' => 1]);
+        foreach ([$this->colleague, $this->otherAdmin, $inactive, $unknown] as $actor) {
+            $this->actingAs($actor, 'sanctum')->putJson(self::URL."/{$record['id']}", ['version' => $record['version'], 'deskripsi' => 'Unauthorized'])
+                ->assertForbidden();
+            $this->deleteJson(self::URL."/{$record['id']}", ['version' => $record['version']])->assertForbidden();
+        }
+        $persisted = SmkiTindakanPerbaikan::findOrFail($record['id']);
+        $this->assertSame($record['version'], $persisted->version);
+        $this->assertSame('Close', $persisted->verifikasi);
+        $this->assertNull($persisted->deleted_at);
+    }
+
     public function test_authentication_active_account_and_service_gate_are_required(): void
     {
         $this->getJson(self::URL)->assertUnauthorized();
@@ -109,6 +173,83 @@ class TindakanPerbaikanApiTest extends TestCase
         $this->assertSame([], $record['items']);
         $this->assertTrue($record['permissions']['can_delete']);
         $this->assertFalse($record['permissions']['can_verify']);
+    }
+
+    public function test_manual_document_metadata_is_persisted_updated_and_exported_separately_from_report_number(): void
+    {
+        $metadata = ['nomor_dokumen' => 'MANUAL/FR009/2026', 'nomor_revisi' => '4.2', 'tanggal_berlaku' => '2027-01-02'];
+        $record = $this->draft($this->payload($metadata));
+        foreach ($metadata as $field => $value) {
+            $this->assertSame($value, $record[$field] ?? null);
+        }
+        $this->assertNotSame($record['nomor_laporan'], $record['nomor_dokumen']);
+        $this->assertSame('3.0', $record['template_version']);
+        $this->putJson(self::URL."/{$record['id']}", ['version' => 1, 'nomor_revisi' => '5.0'])
+            ->assertOk()->assertJsonPath('data.nomor_revisi', '5.0')->assertJsonPath('data.version', 2)
+            ->assertJsonPath('data.nomor_dokumen', $metadata['nomor_dokumen']);
+        $this->getJson(self::URL."/{$record['id']}")->assertOk()->assertJsonPath('data.tanggal_berlaku', '2027-01-02');
+        $this->getJson(self::URL."/{$record['id']}/export-pdf-data")->assertOk()
+            ->assertJsonPath('data.nomor_dokumen', $metadata['nomor_dokumen'])->assertJsonPath('data.nomor_revisi', '5.0')
+            ->assertJsonPath('data.tanggal_berlaku', '2027-01-02');
+        $defaults = $this->draft([]);
+        $this->assertSame('FR-009/ KOM.03.05/SANDIKAMI', $defaults['nomor_dokumen']);
+        $this->assertSame('3.0', $defaults['nomor_revisi']);
+        $this->assertSame(now('Asia/Jakarta')->toDateString(), $defaults['tanggal_berlaku']);
+    }
+
+    public function test_new_effective_date_uses_jakarta_today_but_manual_and_existing_dates_are_preserved(): void
+    {
+        $this->travelTo(Carbon::parse('2026-12-31T18:30:00Z'));
+        $default = $this->draft([]);
+        $this->assertSame('2027-01-01', $default['tanggal_berlaku']);
+        $manual = $this->draft(['tanggal_berlaku' => '2023-09-11']);
+        $this->assertSame('2023-09-11', $manual['tanggal_berlaku']);
+        $this->travelTo(Carbon::parse('2027-01-02T18:30:00Z'));
+        $this->putJson(self::URL."/{$manual['id']}", ['version' => 1, 'nomor_revisi' => '4.0'])
+            ->assertOk()->assertJsonPath('data.tanggal_berlaku', '2023-09-11');
+        $this->getJson(self::URL."/{$default['id']}")->assertOk()->assertJsonPath('data.tanggal_berlaku', '2027-01-01');
+    }
+
+    public function test_minor_and_major_findings_can_be_saved_submitted_verified_and_exported(): void
+    {
+        foreach (['Minor', 'Major'] as $finding) {
+            $record = $this->submitted($this->payload(['status_temuan' => $finding]));
+            $this->assertSame($finding, $record['status_temuan']);
+            $this->assertNull($record['verifikasi']);
+            $this->actingAs($this->admin, 'sanctum')->postJson(self::URL."/{$record['id']}/verify", $this->verification('Open'))
+                ->assertOk()->assertJsonPath('data.status_temuan', $finding)->assertJsonPath('data.verifikasi', 'Open');
+            $this->getJson(self::URL."/{$record['id']}/export-pdf-data")->assertOk()->assertJsonPath('data.status_temuan', $finding);
+        }
+    }
+
+    public function test_document_metadata_rejects_empty_invalid_or_oversized_values_without_mutating_data(): void
+    {
+        $record = $this->draft();
+        foreach ([
+            ['nomor_dokumen' => ''], ['nomor_revisi' => null], ['tanggal_berlaku' => '2026-02-30'],
+            ['nomor_dokumen' => str_repeat('X', 256)], ['nomor_revisi' => str_repeat('X', 51)],
+        ] as $invalid) {
+            $this->postJson(self::URL, $invalid)->assertUnprocessable()->assertJsonValidationErrors(array_keys($invalid));
+            $this->putJson(self::URL."/{$record['id']}", ['version' => 1, ...$invalid])
+                ->assertUnprocessable()->assertJsonValidationErrors(array_keys($invalid));
+        }
+        $this->assertDatabaseCount('smki_tindakan_perbaikans', 1);
+        $this->assertSame(1, SmkiTindakanPerbaikan::findOrFail($record['id'])->version);
+    }
+
+    public function test_document_metadata_migration_preserves_existing_reports_and_can_be_rolled_back(): void
+    {
+        $migration = require database_path('migrations/2026_11_01_000001_add_document_metadata_to_smki_tindakan_perbaikans.php');
+        $record = $this->draft();
+        $migration->down();
+        $migration->up();
+        $persisted = SmkiTindakanPerbaikan::findOrFail($record['id']);
+        $this->assertSame('FR-009/ KOM.03.05/SANDIKAMI', $persisted->nomor_dokumen);
+        $this->assertSame('3.0', $persisted->nomor_revisi);
+        $this->assertSame('2023-09-11', $persisted->tanggal_berlaku->format('Y-m-d'));
+        $this->assertSame($record['nomor_laporan'], $persisted->nomor_laporan);
+        $this->assertSame(1, $persisted->version);
+        $this->assertCount(1, $persisted->items);
     }
 
     public function test_master_names_override_spoofed_snapshots_and_manual_names_are_allowed(): void
@@ -163,7 +304,7 @@ class TindakanPerbaikanApiTest extends TestCase
             $this->postJson(self::URL, ['diajukan_kepada_id' => $invalid->id])
                 ->assertUnprocessable()->assertJsonValidationErrors('diajukan_kepada_id');
         }
-        $this->postJson(self::URL, ['status_temuan' => 'Major'])->assertUnprocessable();
+        $this->postJson(self::URL, ['status_temuan' => 'Critical'])->assertUnprocessable();
         $this->postJson(self::URL, ['sumber_codes' => ['unknown']])->assertUnprocessable();
     }
 
@@ -218,9 +359,7 @@ class TindakanPerbaikanApiTest extends TestCase
         $complete = $this->submitted();
         $this->actingAs($this->admin, 'sanctum')->postJson(self::URL."/{$complete['id']}/verify", $this->verification('Close'))
             ->assertOk()->assertJsonPath('data.verifikasi', 'Close')->assertJsonPath('data.verified_by', $this->admin->id)
-            ->assertJsonPath('data.permissions.can_update', false);
-        $this->putJson(self::URL."/{$complete['id']}", ['version' => 3, 'deskripsi' => 'Changed'])->assertForbidden();
-        $this->deleteJson(self::URL."/{$complete['id']}", ['version' => 3])->assertForbidden();
+            ->assertJsonPath('data.permissions.can_update', true)->assertJsonPath('data.permissions.can_delete', true);
         $this->postJson(self::URL."/{$complete['id']}/verify", $this->verification('Open', 3))->assertForbidden();
     }
 
@@ -253,14 +392,15 @@ class TindakanPerbaikanApiTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors(['deskripsi', 'verified_by']);
     }
 
-    public function test_delete_is_soft_delete_and_only_allowed_for_drafts_with_current_version(): void
+    public function test_delete_is_soft_delete_for_draft_and_submitted_reports_with_current_version(): void
     {
         $draft = $this->draft();
         $this->deleteJson(self::URL."/{$draft['id']}", ['version' => 1])->assertNoContent();
         $this->assertSoftDeleted('smki_tindakan_perbaikans', ['id' => $draft['id']]);
         $this->getJson(self::URL."/{$draft['id']}")->assertNotFound();
         $submitted = $this->submitted();
-        $this->deleteJson(self::URL."/{$submitted['id']}", ['version' => 2])->assertForbidden();
+        $this->deleteJson(self::URL."/{$submitted['id']}", ['version' => 2])->assertNoContent();
+        $this->assertSoftDeleted('smki_tindakan_perbaikans', ['id' => $submitted['id']]);
     }
 
     public function test_search_source_pagination_and_summary_use_the_same_scope_and_filters(): void
