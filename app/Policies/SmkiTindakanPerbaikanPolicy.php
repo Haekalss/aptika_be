@@ -26,12 +26,12 @@ class SmkiTindakanPerbaikanPolicy
 
     public function update(User $user, SmkiTindakanPerbaikan $record): bool
     {
-        return $this->view($user, $record) && $record->verifikasi !== 'Close';
+        return $this->view($user, $record);
     }
 
     public function delete(User $user, SmkiTindakanPerbaikan $record): bool
     {
-        return $this->update($user, $record) && $record->status === 'draft';
+        return $this->view($user, $record);
     }
 
     public function submit(User $user, SmkiTindakanPerbaikan $record): bool

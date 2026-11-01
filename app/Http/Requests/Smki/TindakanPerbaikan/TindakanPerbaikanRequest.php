@@ -55,6 +55,10 @@ abstract class TindakanPerbaikanRequest extends FormRequest
             : 'prohibited';
 
         return [
+            // Omitted fields retain defaults/previous values for existing partial API clients.
+            'nomor_dokumen' => ['sometimes', 'required', 'string', 'max:255'],
+            'nomor_revisi' => ['sometimes', 'required', 'string', 'max:50'],
+            'tanggal_berlaku' => ['sometimes', 'required', 'date_format:Y-m-d'],
             'nomor_laporan' => ['nullable', 'string', 'max:100', Rule::unique('smki_tindakan_perbaikans', 'nomor_laporan')->ignore($record?->id)],
             'id_unit_kerja' => ['nullable', 'integer', 'exists:smki_unit_kerjas,id_unit_kerja'],
             'area' => ['nullable', 'string', 'max:255'],
@@ -66,7 +70,7 @@ abstract class TindakanPerbaikanRequest extends FormRequest
             'sumber_codes' => ['nullable', 'array', 'max:6'],
             'sumber_codes.*' => ['required', 'string', 'distinct', Rule::in(array_keys(SmkiTindakanPerbaikan::SOURCES))],
             'sumber_lainnya' => ['nullable', 'string', 'max:5000'],
-            'status_temuan' => ['nullable', Rule::in(['Minor'])],
+            'status_temuan' => ['nullable', Rule::in(SmkiTindakanPerbaikan::FINDING_STATUSES)],
             'deskripsi' => ['nullable', 'string', 'max:10000'],
             'akar_masalah' => ['nullable', 'string', 'max:10000'],
             'id_auditor' => ['nullable', 'integer', 'exists:auditor,id_auditor'],

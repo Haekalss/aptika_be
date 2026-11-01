@@ -82,8 +82,7 @@ class SmkiTindakanPerbaikanController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'position']),
             'auditors' => Auditor::orderBy('nama_auditor')->get(['id_auditor', 'nama_auditor', 'nip_auditor']),
             'sources' => collect(SmkiTindakanPerbaikan::SOURCES)->map(fn ($label, $code) => compact('code', 'label'))->values(),
-            'template' => ['code' => 'FR-009/ KOM.03.05/SANDIKAMI', 'revision' => '3.0',
-                'effective_date' => '2023-09-11', 'classification' => 'INTERNAL'],
+            'template' => SmkiTindakanPerbaikan::TEMPLATE,
             'export_pdf_available' => $pdfAvailable,
         ]]);
     }

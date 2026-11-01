@@ -11,6 +11,13 @@ class SmkiTindakanPerbaikan extends Model
 {
     use SoftDeletes;
 
+    public const TEMPLATE = [
+        'code' => 'FR-009/ KOM.03.05/SANDIKAMI', 'revision' => '3.0',
+        'effective_date' => '2023-09-11', 'classification' => 'INTERNAL',
+    ];
+
+    public const FINDING_STATUSES = ['Minor', 'Major'];
+
     public const SOURCES = [
         'audit_internal' => 'Audit Internal',
         'laporan_insiden' => 'Laporan Insiden',
@@ -21,6 +28,7 @@ class SmkiTindakanPerbaikan extends Model
     ];
 
     protected $fillable = [
+        'nomor_dokumen', 'nomor_revisi', 'tanggal_berlaku',
         'nomor_laporan', 'id_unit_kerja', 'area', 'tanggal_laporan',
         'diajukan_kepada_id', 'diajukan_kepada_nama', 'dilaporkan_oleh_id', 'dilaporkan_oleh_nama',
         'sumber_codes', 'sumber_lainnya', 'status_temuan', 'deskripsi', 'akar_masalah',
@@ -30,6 +38,7 @@ class SmkiTindakanPerbaikan extends Model
     ];
 
     protected $casts = [
+        'tanggal_berlaku' => 'date:Y-m-d',
         'sumber_codes' => 'array',
         'tanggal_laporan' => 'date:Y-m-d',
         'tanggal_verifikasi' => 'date:Y-m-d',

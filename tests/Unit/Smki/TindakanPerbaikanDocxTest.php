@@ -17,6 +17,32 @@ class TindakanPerbaikanDocxTest extends TestCase
 {
     private array $generatedPaths = [];
 
+    public function test_docx_renders_major_finding_without_changing_verification(): void
+    {
+        $package = $this->readPackage($this->generate($this->report(['status_temuan' => 'Major', 'verifikasi' => 'Open'])));
+        $xpath = $this->xml($package['word/document.xml']);
+        $finding = $xpath->query('/w:document/w:body/w:tbl[2]/w:tr[2]')->item(0)->textContent;
+        $this->assertStringContainsString('Major', $finding);
+        $this->assertStringNotContainsString('Minor', $finding);
+        $this->assertSame(1, $xpath->query('//w:r[w:rPr/w:strike][contains(w:t,"Close")]')->length);
+    }
+
+    public function test_docx_header_uses_manual_metadata_and_preserves_original_header_geometry(): void
+    {
+        $source = $this->readPackage(resource_path('templates/FR-009 Form Tindakan Perbaikan dan Pencegahan.docx'));
+        $output = $this->readPackage($this->generate($this->report([
+            'nomor_dokumen' => 'MANUAL/FR009 & <uji>', 'nomor_revisi' => '4.2', 'tanggal_berlaku' => '2027-01-02',
+        ])));
+        $header = $this->xml($output['word/header1.xml']);
+        $this->assertStringContainsString('MANUAL/FR009 & <uji>', $header->document->textContent);
+        $this->assertStringContainsString(': 4.2', $header->document->textContent);
+        $this->assertStringContainsString('2 Januari 2027', $header->document->textContent);
+        $this->assertStringNotContainsString('11 September 2023', $header->document->textContent);
+        foreach (['//w:tblPr', '//w:tblGrid', '//w:tcPr', '//w:trPr', '//w:pPr', '//w:drawing'] as $expression) {
+            $this->assertSame($this->canonicalNodes($this->xml($source['word/header1.xml']), $expression), $this->canonicalNodes($header, $expression), $expression);
+        }
+    }
+
     protected function tearDown(): void
     {
         foreach ($this->generatedPaths as $path) {
@@ -34,7 +60,7 @@ class TindakanPerbaikanDocxTest extends TestCase
 
         $this->assertSame(array_keys($source), array_keys($output));
         foreach ($source as $part => $bytes) {
-            if (! in_array($part, ['word/document.xml', 'word/footer1.xml', 'word/settings.xml'], true)) {
+            if (! in_array($part, ['word/document.xml', 'word/header1.xml', 'word/footer1.xml', 'word/settings.xml'], true)) {
                 $this->assertSame($bytes, $output[$part], 'Template part changed: '.$part);
             }
         }
