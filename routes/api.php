@@ -1690,6 +1690,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.laporan-audit.destroy',
                 ]);
 
+            // Formulir Hak Akses Fisik (FR-019)
+            Route::get('hak-akses-fisik/lookup', [\App\Http\Controllers\Smki\SmkiHakAksesFisikController::class, 'lookup'])
+                ->name('smki.hak-akses-fisik.lookup');
+            Route::get('hak-akses-fisik/export-docx', [\App\Http\Controllers\Smki\SmkiHakAksesFisikController::class, 'exportDocx'])
+                ->name('smki.hak-akses-fisik.export-docx');
+            Route::apiResource('hak-akses-fisik', \App\Http\Controllers\Smki\SmkiHakAksesFisikController::class)
+                ->names([
+                    'index'   => 'smki.hak-akses-fisik.index',
+                    'store'   => 'smki.hak-akses-fisik.store',
+                    'show'    => 'smki.hak-akses-fisik.show',
+                    'update'  => 'smki.hak-akses-fisik.update',
+                    'destroy' => 'smki.hak-akses-fisik.destroy',
+                ]);
+
             // Formulir Hak Akses TI (FR-018)
             Route::get('hak-akses-ti/lookup', [\App\Http\Controllers\Smki\HakAksesTiController::class, 'lookup'])
                 ->name('smki.hak-akses-ti.lookup');
