@@ -3,6 +3,8 @@
 namespace App\Services\Smki;
 
 use App\Models\SmkiTindakanPerbaikan;
+use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\TteResolverService;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMElement;
@@ -17,6 +19,7 @@ use ZipArchive;
 
 class SmkiTindakanPerbaikanDocxService
 {
+    use FillsDocxTemplate;
     private const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
     public function generateDocx(SmkiTindakanPerbaikan $report): string
@@ -98,8 +101,12 @@ class SmkiTindakanPerbaikanDocxService
 
             $signatureCells = $xpath->query('w:tc', $rows[9]);
             $audit = count(array_intersect($report->sumber_codes ?? [], ['audit_internal', 'audit_eksternal'])) > 0;
-            $this->writeParagraph($dom, $xpath, $xpath->query('w:p', $signatureCells->item(0))->item(3), $audit ? $report->auditor_nama : null);
-            $this->writeParagraph($dom, $xpath, $xpath->query('w:p', $signatureCells->item(1))->item(3), $report->atasan_nama);
+            if ($signatureCells->length > 0) {
+                $this->fillSignatureBlock($zip, $dom, $xpath, $signatureCells->item(0), $audit ? ($report->auditor_nama ?? '') : '');
+            }
+            if ($signatureCells->length > 1) {
+                $this->fillSignatureBlock($zip, $dom, $xpath, $signatureCells->item(1), $report->atasan_nama ?? '');
+            }
 
             if (! $zip->addFromString('word/document.xml', $dom->saveXML())) {
                 throw new RuntimeException('Gagal menyimpan isi DOCX.');
@@ -297,5 +304,59 @@ class SmkiTindakanPerbaikanDocxService
         $xpath->registerNamespace('w', self::W);
 
         return $xpath;
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE ber-QR Code ke dalam sel tanda tangan FR-009.
+     */
+    private function fillSignatureBlock(
+        ZipArchive $zip,
+        DOMDocument $dom,
+        DOMXPath $xpath,
+        DOMElement $cell,
+        string $signerName
+    ): void {
+        $paras = $xpath->query('w:p', $cell);
+        $signerName = trim($signerName);
+
+        if ($signerName === '') {
+            if ($paras->length > 3) {
+                $this->writeParagraph($dom, $xpath, $paras->item(3), '-');
+            }
+            return;
+        }
+
+        $path = app(TteResolverService::class)->imagePath('', $signerName);
+
+        if ($path !== null) {
+            $targetP = $paras->length > 1 ? $paras->item(1) : $cell->appendChild($dom->createElementNS(self::W, 'w:p'));
+
+            while ($targetP->firstChild) {
+                $targetP->removeChild($targetP->firstChild);
+            }
+
+            $pPr = $dom->createElementNS(self::W, 'w:pPr');
+            $jc = $dom->createElementNS(self::W, 'w:jc');
+            $jc->setAttributeNS(self::W, 'w:val', 'center');
+            $pPr->appendChild($jc);
+            $targetP->appendChild($pPr);
+
+            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $targetP, $path, 180)) {
+                if ($paras->length > 3) {
+                    $this->writeParagraph($dom, $xpath, $paras->item(3), '');
+                }
+                if ($paras->length > 2 && $paras->item(2) !== $targetP) {
+                    $this->writeParagraph($dom, $xpath, $paras->item(2), '');
+                }
+            } else {
+                if ($paras->length > 3) {
+                    $this->writeParagraph($dom, $xpath, $paras->item(3), $signerName);
+                }
+            }
+        } else {
+            if ($paras->length > 3) {
+                $this->writeParagraph($dom, $xpath, $paras->item(3), $signerName);
+            }
+        }
     }
 }
