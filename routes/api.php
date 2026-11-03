@@ -1487,6 +1487,41 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::apiResource('tindakan-perbaikan', \App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class)
                 ->parameters(['tindakan-perbaikan' => 'tindakanPerbaikan']);
 
+            // Evaluasi Kinerja Penyedia Barang/Jasa (FR-021)
+            Route::get('evaluasi-penyedia/master', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'master'])
+                ->name('smki.evaluasi-penyedia.master');
+            Route::get('evaluasi-penyedia/admins', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'admins'])
+                ->name('smki.evaluasi-penyedia.admins');
+            Route::get('evaluasi-penyedia/{evaluasiPenyedia}/riwayat', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'riwayat'])
+                ->name('smki.evaluasi-penyedia.riwayat');
+            Route::get('evaluasi-penyedia/{evaluasiPenyedia}/riwayat/{log}/penilaian', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'snapshot'])
+                ->name('smki.evaluasi-penyedia.snapshot');
+            Route::put('evaluasi-penyedia/{evaluasiPenyedia}/identifikasi', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'updateIdentifikasi'])
+                ->name('smki.evaluasi-penyedia.identifikasi');
+            Route::put('evaluasi-penyedia/{evaluasiPenyedia}/penilaian', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'updatePenilaian'])
+                ->name('smki.evaluasi-penyedia.penilaian');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/hitung', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'hitung'])
+                ->name('smki.evaluasi-penyedia.hitung');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/ajukan', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'ajukan'])
+                ->name('smki.evaluasi-penyedia.ajukan');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/setujui', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'setujui'])
+                ->name('smki.evaluasi-penyedia.setujui');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/kembalikan', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'kembalikan'])
+                ->name('smki.evaluasi-penyedia.kembalikan');
+            Route::apiResource('evaluasi-penyedia', \App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class)
+                ->parameters(['evaluasi-penyedia' => 'evaluasiPenyedia'])
+                ->only(['index', 'store', 'show', 'destroy'])
+                ->names([
+                    'index' => 'smki.evaluasi-penyedia.index',
+                    'store' => 'smki.evaluasi-penyedia.store',
+                    'show' => 'smki.evaluasi-penyedia.show',
+                    'destroy' => 'smki.evaluasi-penyedia.destroy',
+                ]);
+            Route::get('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'lookup'])
+                ->name('smki.penyedia.lookup');
+            Route::post('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'store'])
+                ->name('smki.penyedia.store');
+
             Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
             Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
             Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
