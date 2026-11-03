@@ -62,7 +62,7 @@ use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\ActiveSessionController;
 use App\Http\Controllers\Admin\AdminStatsController;
 
-// TAMBAHAN BARU: Import Controller Aset Sistem Informasi
+use App\Http\Controllers\SmkiSpesimenTteController;
 use App\Http\Controllers\Api\AsetSistemInformasiController;
 
 // Route::post('/register', [RegisteredUserController::class, 'store']);
@@ -1641,7 +1641,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('perubahan-it/{id}/aksi', [\App\Http\Controllers\Smki\SmkiPerubahanItController::class, 'aksi']);
             Route::apiResource('perubahan-it', \App\Http\Controllers\Smki\SmkiPerubahanItController::class)
                 ->parameters(['perubahan-it' => 'id']);
-                
+
+            Route::prefix('spesimen-tte')->group(function () {
+                Route::get('saya', [SmkiSpesimenTteController::class, 'saya']);
+                Route::post('/', [SmkiSpesimenTteController::class, 'simpan']);
+                Route::delete('/', [SmkiSpesimenTteController::class, 'hapus']);
+                Route::get('{userId}', [SmkiSpesimenTteController::class, 'tampil'])->whereNumber('userId');
+            });
+                            
             // Formulir Hardening Pengecekan Aset (FR-047)
             Route::get('formulir-hardening/lookup', [\App\Http\Controllers\Smki\SmkiFormulirHardeningController::class, 'lookup'])
                 ->name('smki.formulir-hardening.lookup');
