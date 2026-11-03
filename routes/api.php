@@ -1656,6 +1656,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.formulir-hardening.destroy',
                 ]);
 
+                // Formulir Aset Informasi (FR-028)
+            Route::get('aset-informasi/{id}/export-excel', [\App\Http\Controllers\Smki\SmkiAsetInformasiController::class, 'exportExcel'])
+                ->name('smki.aset-informasi.export-excel');
+            Route::apiResource('aset-informasi', \App\Http\Controllers\Smki\SmkiAsetInformasiController::class)
+                ->names([
+                    'index'   => 'smki.aset-informasi.index',
+                    'store'   => 'smki.aset-informasi.store',
+                    'show'    => 'smki.aset-informasi.show',
+                    'update'  => 'smki.aset-informasi.update',
+                    'destroy' => 'smki.aset-informasi.destroy',
+                ]);
+
             // Formulir Rencana Audit (F05-SMKI)
             Route::get('rencana-audit/lookup', [\App\Http\Controllers\Smki\SmkiRencanaAuditController::class, 'lookup'])
                 ->name('smki.rencana-audit.lookup');
