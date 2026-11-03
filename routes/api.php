@@ -1527,6 +1527,17 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
                 ->parameters(['removable-media' => 'removable_media']);
 
+            // Daftar Aset Virtual (FR-035)
+            Route::apiResource('daftar-aset-virtual', \App\Http\Controllers\Smki\SmkiDaftarAsetVirtualController::class)
+                ->parameters(['daftar-aset-virtual' => 'daftar_aset_virtual'])
+                ->names([
+                    'index' => 'smki.daftar-aset-virtual.index',
+                    'store' => 'smki.daftar-aset-virtual.store',
+                    'show' => 'smki.daftar-aset-virtual.show',
+                    'update' => 'smki.daftar-aset-virtual.update',
+                    'destroy' => 'smki.daftar-aset-virtual.destroy',
+                ]);
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
