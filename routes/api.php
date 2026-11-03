@@ -63,6 +63,7 @@ use App\Http\Controllers\Admin\ActiveSessionController;
 use App\Http\Controllers\Admin\AdminStatsController;
 
 use App\Http\Controllers\SmkiSpesimenTteController;
+use App\Http\Controllers\Api\AsetSistemInformasiController;
 
 // Route::post('/register', [RegisteredUserController::class, 'store']);
 // Dinonaktifkan karena registrasi publik tidak diperbolehkan.
@@ -79,9 +80,11 @@ Route::prefix('form-perubahan-it')->group(function () {
     Route::patch('/{id}/assign', [PermohonanTiController::class, 'assign']);
 });
 
-// ============================================================
+// =====================================================                ]);
+
 // PUBLIC MASTER DATA & SYSTEM HEALTH
-// ============================================================
+// =====================================================                ]);
+
 
 // Public Health Check & Database Status
 Route::get('/system/db-status', function () {
@@ -183,9 +186,11 @@ Route::get('/storage/{path}', [MagangController::class, 'serveFile'])
     ->where('path', '.*');
 
 
-// ============================================================
+// =====================================================                ]);
+
 // AUTHENTICATED API
-// ============================================================
+// =====================================================                ]);
+
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
@@ -286,9 +291,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::put('/password', [PasswordController::class, 'update']);
     Route::put('/profile/password', [PasswordController::class, 'update']);
 
-    // ========================================================
+    // =================================================                ]);
+
     // MASTER DATA (REFERENSI TABEL SISTEM)
-    // ========================================================
+    // =================================================                ]);
+
     Route::prefix('master')->name('master.')->group(function () {
         Route::apiResource('rekening', RekeningController::class);
         Route::apiResource('alat-angkutan', AlatAngkutanController::class);
@@ -296,9 +303,26 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::apiResource('nda', \App\Http\Controllers\MasterNdaController::class);
     });
 
-    // ========================================================
+    // =================================================
+        // SPESIMEN TTE (TANDA TANGAN ELEKTRONIK)
+        // Sumber data: master pegawai (tabel pegawai).
+        // =================================================
+        Route::prefix('tte')->name('tte.')->group(function () {
+            Route::get('pegawai', [\App\Http\Controllers\Api\TteSpecimenController::class, 'pegawai'])->name('pegawai');
+            Route::get('data/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'data'])->name('data');
+            Route::get('spesimen/{pegawai}', [\App\Http\Controllers\Api\TteSpecimenController::class, 'show'])->name('spesimen');
+
+            // Resolver & daftar pilihan penanda tangan (dari master pegawai)
+            Route::get('resolve', [\App\Http\Controllers\Api\TteResolverController::class, 'resolve'])->name('resolve');
+            Route::get('resolve/image', [\App\Http\Controllers\Api\TteResolverController::class, 'image'])->name('resolve.image');
+            Route::get('options', [\App\Http\Controllers\Api\TteResolverController::class, 'options'])->name('options');
+        });
+
+    // =================================================                ]);
+
     // ADMIN PANEL
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['role:admin'])
         ->prefix('admin')
@@ -366,9 +390,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: ADMINISTRASI SURAT
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:ADMINISTRASI_SURAT'])
         ->group(function () {
@@ -517,9 +543,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: IKI REPORT
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:IKI_REPORT'])
         ->group(function () {
@@ -1176,9 +1204,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: MANAJEMEN TUGAS DIGITAL
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:MANAJEMEN_TUGAS'])
         ->group(function () {
@@ -1360,9 +1390,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: MAGANG
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:MAGANG'])
         ->group(function () {
@@ -1379,9 +1411,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         });
 
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: ADMINISTRASI SURAT - BAGIAN 2
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:ADMINISTRASI_SURAT'])
         ->group(function () {
@@ -1420,13 +1454,44 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             );
         });
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: SMKI - MANAJEMEN DAFTAR SOFTWARE STANDAR & ASET TI
-    // ========================================================
+    // =================================================                ]);
+
 
     Route::middleware(['service.enabled:SMKI'])
         ->prefix('smki')
         ->group(function () {
+            Route::put('komunikasi/header', [\App\Http\Controllers\Smki\SmkiKomunikasiController::class, 'updateHeader']);
+            Route::apiResource('komunikasi', \App\Http\Controllers\Smki\SmkiKomunikasiController::class)
+                ->names([
+                    'index' => 'smki.komunikasi.index',
+                    'store' => 'smki.komunikasi.store',
+                    'show' => 'smki.komunikasi.show',
+                    'update' => 'smki.komunikasi.update',
+                    'destroy' => 'smki.komunikasi.destroy',
+                ]);
+
+            // Formulir Log Perubahan (FR-032)
+            Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
+            Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
+
+            // Formulir Tindakan Perbaikan dan Pencegahan (FR-009)
+            Route::get('tindakan-perbaikan/lookup', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'lookup']);
+            Route::post('tindakan-perbaikan/{tindakanPerbaikan}/submit', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'submit']);
+            Route::post('tindakan-perbaikan/{tindakanPerbaikan}/verify', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'verify']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-docx', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'docx']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-pdf', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'pdf']);
+            Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-pdf-data', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'pdfData']);
+            Route::apiResource('tindakan-perbaikan', \App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class)
+                ->parameters(['tindakan-perbaikan' => 'tindakanPerbaikan']);
+
+            Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
+            Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
+            Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
+                ->parameters(['removable-media' => 'removable_media']);
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
@@ -1469,6 +1534,68 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.evaluasi-kepatuhan.show',
                     'update'  => 'smki.evaluasi-kepatuhan.update',
                     'destroy' => 'smki.evaluasi-kepatuhan.destroy',
+                ]);
+
+            // Formulir Review Log (FR-040)
+            Route::get('review-log/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviewLogController::class, 'exportDocx'])
+                ->name('smki.review-log.export-docx');
+            Route::apiResource('review-log', \App\Http\Controllers\Smki\SmkiReviewLogController::class)
+                ->names([
+                    'index'   => 'smki.review-log.index',
+                    'store'   => 'smki.review-log.store',
+                    'show'    => 'smki.review-log.show',
+                    'update'  => 'smki.review-log.update',
+                    'destroy' => 'smki.review-log.destroy',
+                ]);
+
+            // Formulir Bring Your Own Device / Penggunaan Perangkat Pribadi (FR-045)
+            Route::get('perangkat-pribadi/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiByodController::class, 'exportDocx'])
+                ->name('smki.perangkat-pribadi.export-docx');
+            Route::apiResource('perangkat-pribadi', \App\Http\Controllers\Smki\SmkiByodController::class)
+                ->names([
+                    'index'   => 'smki.perangkat-pribadi.index',
+                    'store'   => 'smki.perangkat-pribadi.store',
+                    'show'    => 'smki.perangkat-pribadi.show',
+                    'update'  => 'smki.perangkat-pribadi.update',
+                    'destroy' => 'smki.perangkat-pribadi.destroy',
+                ]);
+
+            // Formulir Reviu Monitoring dan Pemeliharaan CCTV (FR-038)
+            Route::get('reviu-cctv/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiReviuCctvController::class, 'exportDocx'])
+                ->name('smki.reviu-cctv.export-docx');
+            Route::apiResource('reviu-cctv', \App\Http\Controllers\Smki\SmkiReviuCctvController::class)
+                ->names([
+                    'index'   => 'smki.reviu-cctv.index',
+                    'store'   => 'smki.reviu-cctv.store',
+                    'show'    => 'smki.reviu-cctv.show',
+                    'update'  => 'smki.reviu-cctv.update',
+                    'destroy' => 'smki.reviu-cctv.destroy',
+                ]);
+
+            // Formulir Laporan Evaluasi dan Pengujian DRP (FR-039)
+            Route::get('evaluasi-drp/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class, 'exportDocx'])
+                ->name('smki.evaluasi-drp.export-docx');
+            Route::apiResource('evaluasi-drp', \App\Http\Controllers\Smki\SmkiDrpEvaluasiController::class)
+                ->names([
+                    'index'   => 'smki.evaluasi-drp.index',
+                    'store'   => 'smki.evaluasi-drp.store',
+                    'show'    => 'smki.evaluasi-drp.show',
+                    'update'  => 'smki.evaluasi-drp.update',
+                    'destroy' => 'smki.evaluasi-drp.destroy',
+                ]);
+
+            // Formulir Checklist Monitoring dan Pemeliharaan CCTV (FR-037)
+            Route::get('pemeriksaan-cctv/terakhir', [\App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class, 'terakhir'])
+                ->name('smki.pemeriksaan-cctv.terakhir');
+            Route::get('pemeriksaan-cctv/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class, 'exportDocx'])
+                ->name('smki.pemeriksaan-cctv.export-docx');
+            Route::apiResource('pemeriksaan-cctv', \App\Http\Controllers\Smki\SmkiPemeriksaanCctvController::class)
+                ->names([
+                    'index'   => 'smki.pemeriksaan-cctv.index',
+                    'store'   => 'smki.pemeriksaan-cctv.store',
+                    'show'    => 'smki.pemeriksaan-cctv.show',
+                    'update'  => 'smki.pemeriksaan-cctv.update',
+                    'destroy' => 'smki.pemeriksaan-cctv.destroy',
                 ]);
 
             // Berita Acara Penghancuran Media (FR014-SMKI)
@@ -1548,6 +1675,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.rencana-audit.destroy',
                 ]);
 
+            // Formulir Tahunan Audit Internal (FR-008)
+            Route::get('laporan-audit-tahunan/lookup', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'lookup'])->name('smki.laporan-audit-tahunan.lookup');
+            Route::post('laporan-audit-tahunan/store-all', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'storeAll'])->name('smki.laporan-audit-tahunan.store-all');
+            Route::get('laporan-audit-tahunan/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'exportDocx'])->name('smki.laporan-audit-tahunan.export-docx');
+            Route::get('laporan-audit-tahunan', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'index'])->name('smki.laporan-audit-tahunan.index');
+            Route::get('laporan-audit-tahunan/{id}', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'show'])->name('smki.laporan-audit-tahunan.show');
+            Route::delete('laporan-audit-tahunan/{id}', [\App\Http\Controllers\Smki\SmkiLaporanAuditTahunanController::class, 'destroy'])->name('smki.laporan-audit-tahunan.destroy');
+
             // Laporan Audit Internal SMKI (FR-006)
             Route::get('laporan-audit/lookup', [\App\Http\Controllers\Smki\SmkiLaporanAuditController::class, 'lookup'])
                 ->name('smki.laporan-audit.lookup');
@@ -1560,6 +1695,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.laporan-audit.show',
                     'update'  => 'smki.laporan-audit.update',
                     'destroy' => 'smki.laporan-audit.destroy',
+                ]);
+
+            // Formulir Hak Akses Fisik (FR-019)
+            Route::get('hak-akses-fisik/lookup', [\App\Http\Controllers\Smki\SmkiHakAksesFisikController::class, 'lookup'])
+                ->name('smki.hak-akses-fisik.lookup');
+            Route::get('hak-akses-fisik/export-docx', [\App\Http\Controllers\Smki\SmkiHakAksesFisikController::class, 'exportDocx'])
+                ->name('smki.hak-akses-fisik.export-docx');
+            Route::apiResource('hak-akses-fisik', \App\Http\Controllers\Smki\SmkiHakAksesFisikController::class)
+                ->names([
+                    'index'   => 'smki.hak-akses-fisik.index',
+                    'store'   => 'smki.hak-akses-fisik.store',
+                    'show'    => 'smki.hak-akses-fisik.show',
+                    'update'  => 'smki.hak-akses-fisik.update',
+                    'destroy' => 'smki.hak-akses-fisik.destroy',
                 ]);
 
             // Formulir Hak Akses TI (FR-018)
@@ -1575,17 +1724,100 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'update'  => 'smki.hak-akses-ti.update',
                     'destroy' => 'smki.hak-akses-ti.destroy',
                 ]);
+
+                // Formulir Notulen Management Review SMKI (FR-011)
+            Route::get('notulen/lookup', [\App\Http\Controllers\Smki\SmkiNotulenController::class, 'lookup'])
+                ->name('smki.notulen.lookup');
+            Route::get('notulen/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiNotulenController::class, 'exportDocx'])
+                ->name('smki.notulen.export-docx');
+            Route::apiResource('notulen', \App\Http\Controllers\Smki\SmkiNotulenController::class)
+                ->names([
+                    'index'   => 'smki.notulen.index',
+                    'store'   => 'smki.notulen.store',
+                    'show'    => 'smki.notulen.show',
+                    'update'  => 'smki.notulen.update',
+                    'destroy' => 'smki.notulen.destroy',
+                ]);
+
+            // Laporan Kerusakan Data Center (Sub-Modul SMKI)
+            Route::get('laporan-kerusakan/lookup', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'lookup'])
+                ->name('smki.laporan-kerusakan.lookup');
+            Route::get('laporan-kerusakan/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'exportBatchDocx'])
+                ->name('smki.laporan-kerusakan.export-batch-docx');
+            Route::get('laporan-kerusakan/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'exportDocx'])
+                ->name('smki.laporan-kerusakan.export-docx');
+            Route::patch('laporan-kerusakan/{id}/assign', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'assign'])
+                ->name('smki.laporan-kerusakan.assign');
+            Route::patch('laporan-kerusakan/{id}/validate', [\App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class, 'validateReport'])
+                ->name('smki.laporan-kerusakan.validate');
+            Route::apiResource('laporan-kerusakan', \App\Http\Controllers\Smki\SmkiLaporanKerusakanController::class)
+                ->names([
+                    'index'   => 'smki.laporan-kerusakan.index',
+                    'store'   => 'smki.laporan-kerusakan.store',
+                    'show'    => 'smki.laporan-kerusakan.show',
+                    'update'  => 'smki.laporan-kerusakan.update',
+                    'destroy' => 'smki.laporan-kerusakan.destroy',
+                ]);
+
+            // ==========================================
+            // PELAPORAN INSIDEN KEAMANAN INFORMASI (FR-016)
+            // ==========================================
+            Route::get('pelaporan-insiden/lookup', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'lookup'])
+                ->name('smki.pelaporan-insiden.lookup');
+            Route::get('pelaporan-insiden/export-docx', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'exportDocx'])
+                ->name('smki.pelaporan-insiden.export-docx-all');
+            Route::get('pelaporan-insiden/{id}/export-docx', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'exportDocx'])
+                ->name('smki.pelaporan-insiden.export-docx-single');
+            Route::get('pelaporan-insiden/{id}/unduh', [\App\Http\Controllers\Smki\SmkiInsidenReportController::class, 'downloadBukti'])
+                ->name('smki.pelaporan-insiden.download');
+            Route::apiResource('pelaporan-insiden', \App\Http\Controllers\Smki\SmkiInsidenReportController::class)
+                ->names([
+                    'index'   => 'smki.pelaporan-insiden.index',
+                    'store'   => 'smki.pelaporan-insiden.store',
+                    'show'    => 'smki.pelaporan-insiden.show',
+                    'update'  => 'smki.pelaporan-insiden.update',
+                    'destroy' => 'smki.pelaporan-insiden.destroy',
+                ]);
+
+            // ==========================================
+            // ASET SISTEM INFORMASI (FR-036)
+            // ==========================================
+            Route::get('aset-sistem-informasi', [AsetSistemInformasiController::class, 'index'])
+                ->name('smki.aset-sistem-informasi.index');
+            Route::post('aset-sistem-informasi', [AsetSistemInformasiController::class, 'store'])
+                ->name('smki.aset-sistem-informasi.store');
+            Route::get('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'show'])
+                ->name('smki.aset-sistem-informasi.show');
+            Route::put('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'update'])
+                ->name('smki.aset-sistem-informasi.update');
+            Route::delete('aset-sistem-informasi/{id}', [AsetSistemInformasiController::class, 'destroy'])
+                ->name('smki.aset-sistem-informasi.destroy');
+            // ==========================================
+
+            // Berita Acara Screening Karyawan Outsourcing (FR-012/KOM.03.05/SANDIKAMI)
+            Route::get('screening-karyawan/lookup', [\App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class, 'lookup'])
+                ->name('smki.screening-karyawan.lookup');
+            Route::get('screening-karyawan/{id}/print', [\App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class, 'printHtml'])
+                ->name('smki.screening-karyawan.print');
+            Route::apiResource('screening-karyawan', \App\Http\Controllers\Smki\SmkiScreeningKaryawanController::class)
+                ->names([
+                    'index'   => 'smki.screening-karyawan.index',
+                    'store'   => 'smki.screening-karyawan.store',
+                    'show'    => 'smki.screening-karyawan.show',
+                    'update'  => 'smki.screening-karyawan.update',
+                    'destroy' => 'smki.screening-karyawan.destroy',
+                ]);
         });
 
-    // ========================================================
+    // =================================================                ]);
+
     // LAYANAN: INVENTARISASI DAFTAR ASET TI (BIDANG APTIKA)
     // Route standalone (tanpa prefix smki) - memiliki nama default apiResource
-    // ========================================================
+    // =================================================                ]);
+
     Route::get('daftar-aset-ti/lookup', [\App\Http\Controllers\DaftarAsetTiController::class, 'lookup'])
         ->name('daftar-aset-ti.lookup');
     Route::get('daftar-aset-ti/export-excel', [\App\Http\Controllers\DaftarAsetTiController::class, 'exportExcel'])
         ->name('daftar-aset-ti.export-excel');
     Route::apiResource('daftar-aset-ti', \App\Http\Controllers\DaftarAsetTiController::class);
 });
-
-

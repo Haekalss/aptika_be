@@ -3,6 +3,59 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$mysqlSslCa = env('MYSQL_ATTR_SSL_CA');
+$mysqlHost = parse_url(env('DB_URL') ?: '', PHP_URL_HOST) ?: env('DB_HOST', '127.0.0.1');
+$mysqlSslOptions = [];
+
+// TiDB public endpoints require TLS, including when no CA path is supplied.
+if (extension_loaded('pdo_mysql') && ($mysqlSslCa || str_contains(strtolower((string) $mysqlHost), 'tidbcloud.com'))) {
+    $certificateLocations = function_exists('openssl_get_cert_locations') ? openssl_get_cert_locations() : [];
+    $cleanEnvCa = is_string($mysqlSslCa) ? ltrim($mysqlSslCa, '/\\') : null;
+
+    $certificateCandidates = [
+        is_string($mysqlSslCa) ? $mysqlSslCa : null,
+        $cleanEnvCa ? base_path($cleanEnvCa) : null,
+        $cleanEnvCa ? storage_path($cleanEnvCa) : null,
+        base_path('database/isrgrootx1.pem'),
+        storage_path('certs/isrgrootx1.pem'),
+        __DIR__ . '/../database/isrgrootx1.pem',
+        __DIR__ . '/../storage/certs/isrgrootx1.pem',
+        ini_get('openssl.cafile'),
+        env('SSL_CERT_FILE'),
+        $certificateLocations['default_cert_file'] ?? null,
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/etc/ssl/cert.pem',
+        '/etc/pki/tls/certs/ca-bundle.crt',
+    ];
+
+    $certificatePath = null;
+    foreach ($certificateCandidates as $candidate) {
+        if (! is_string($candidate) || $candidate === '' || $candidate === 'true' || $candidate === '1') {
+            continue;
+        }
+
+        if (! str_starts_with($candidate, '/') && ! str_starts_with($candidate, '\\') && ! preg_match('/^[A-Za-z]:/', $candidate)) {
+            $candidate = base_path($candidate);
+        }
+
+        if (is_file($candidate) && is_readable($candidate)) {
+            $certificatePath = $candidate;
+            break;
+        }
+    }
+
+    $verifyAttr = PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_VERIFY_SERVER_CERT : PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT;
+    $caAttr = PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA;
+
+    $mysqlSslOptions = [
+        $verifyAttr => filter_var(env('MYSQL_ATTR_SSL_VERIFY_SERVER_CERT', false), FILTER_VALIDATE_BOOLEAN),
+    ];
+
+    if ($certificatePath !== null) {
+        $mysqlSslOptions[$caAttr] = $certificatePath;
+    }
+}
+
 return [
 
     /*
@@ -17,7 +70,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', 'mysql'),
 
     /*
     |--------------------------------------------------------------------------
@@ -59,9 +112,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlSslOptions,
         ],
 
         'mariadb' => [
@@ -79,9 +130,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlSslOptions,
         ],
 
         'pgsql' => [

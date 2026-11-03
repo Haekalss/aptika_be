@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\SmkiLaporanAudit;
+use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\TteResolverService;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
@@ -12,6 +14,7 @@ use ZipArchive;
 
 class SmkiLaporanAuditDocxService
 {
+    use FillsDocxTemplate;
     /**
      * Cari path template dokumen FR-006 Laporan Audit Internal.
      */
@@ -183,8 +186,13 @@ class SmkiLaporanAuditDocxService
                 $this->setCellText($xpath, $dom, $rows2->item(0), 1, 'Bandung, ' . $todayFormatted);
             }
             if ($rows2->length > 1) {
-                $this->setCellText($xpath, $dom, $rows2->item(1), 0, "Auditor,\n\n\n\n\n(" . $auditorName . ")");
-                $this->setCellText($xpath, $dom, $rows2->item(1), 1, "Auditee,\n\n\n\n\n(" . $auditeeName . ")");
+                $cellsRow1 = $xpath->query('w:tc', $rows2->item(1));
+                if ($cellsRow1->length > 0) {
+                    $this->fillSignatureCell($zip, $dom, $xpath, $cellsRow1->item(0), 'Auditor,', $auditorName);
+                }
+                if ($cellsRow1->length > 1) {
+                    $this->fillSignatureCell($zip, $dom, $xpath, $cellsRow1->item(1), 'Auditee,', $auditeeName);
+                }
             }
         }
 
@@ -263,5 +271,84 @@ class SmkiLaporanAuditDocxService
         $t->nodeValue = $text;
         $r->appendChild($t);
         $node->appendChild($r);
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE ber-QR Code ke dalam sel tanda tangan.
+     */
+    private function fillSignatureCell(
+        ZipArchive $zip,
+        DOMDocument $dom,
+        DOMXPath $xpath,
+        DOMElement $cell,
+        string $roleTitle,
+        string $signerName
+    ): void {
+        while ($cell->firstChild) {
+            $cell->removeChild($cell->firstChild);
+        }
+
+        $titleP = $this->createParagraph($dom, $roleTitle, 'center');
+        $cell->appendChild($titleP);
+
+        $path = $signerName !== '' ? app(TteResolverService::class)->imagePath('', $signerName) : null;
+
+        if ($path !== null) {
+            $imgP = $this->createImageParagraph($dom, 'center');
+            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgP, $path, 200)) {
+                $cell->appendChild($imgP);
+            } else {
+                $nameP = $this->createParagraph($dom, "\n\n\n\n\n(" . $signerName . ")", 'center');
+                $cell->appendChild($nameP);
+            }
+        } else {
+            $nameP = $this->createParagraph($dom, "\n\n\n\n\n(" . ($signerName ?: '……………………………………') . ")", 'center');
+            $cell->appendChild($nameP);
+        }
+    }
+
+    private function createParagraph(DOMDocument $dom, string $text, string $align = 'center'): DOMElement
+    {
+        $p = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:p');
+        $pPr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:pPr');
+        $jc = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:jc');
+        $jc->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:val', $align);
+        $pPr->appendChild($jc);
+        $p->appendChild($pPr);
+
+        $lines = explode("\n", $text);
+        foreach ($lines as $idx => $line) {
+            if ($idx > 0) {
+                $rBr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+                $rBr->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:br'));
+                $p->appendChild($rBr);
+            }
+            if ($line !== '') {
+                $r = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+                $t = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
+                $t->setAttribute('xml:space', 'preserve');
+                $t->appendChild($dom->createTextNode($line));
+                $r->appendChild($t);
+                $p->appendChild($r);
+            }
+        }
+
+        return $p;
+    }
+
+    private function createImageParagraph(DOMDocument $dom, string $align = 'center'): DOMElement
+    {
+        $p = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:p');
+        $pPr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:pPr');
+        $jc = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:jc');
+        $jc->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:val', $align);
+        $pPr->appendChild($jc);
+        $spacing = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:spacing');
+        $spacing->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:before', '60');
+        $spacing->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:after', '60');
+        $pPr->appendChild($spacing);
+        $p->appendChild($pPr);
+
+        return $p;
     }
 }

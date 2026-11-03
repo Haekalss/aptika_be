@@ -48,9 +48,15 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AsetTiMasterSeeder::class,
             DaftarAsetTiSeeder::class,
+            DataCenterSeeder::class,
             SmkiSoftwareStandarSeeder::class,
             SmkiFormulirHardeningSeeder::class,
         ]);
+
+        // Data contoh FR-025 membutuhkan akun, bidang, dan master aset yang sudah tersedia.
+        if (app()->environment(['local', 'testing'])) {
+            $this->call(SmkiRemovableMediaSeeder::class);
+        }
 
         // Seed SMKI Rencana Audit (master: bidang_auditee, lokasi_auditee, auditee, auditor)
         $this->call([
@@ -61,5 +67,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SmkiLaporanAuditSeeder::class,
         ]);
+
+        if (app()->environment('local', 'testing')) {
+            $this->call(SmkiTindakanPerbaikanSeeder::class);
+        }
     }
 }
