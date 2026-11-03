@@ -42,6 +42,7 @@ class SmkiPerubahanItController extends Controller
 
             $query->where(function ($q) use ($search, $nameCol) {
                 $q->where('no_rfc', 'like', "%{$search}%")
+                    ->orWhere('nomor_dokumen', 'like', "%{$search}%") // BARU
                     ->orWhere('judul', 'like', "%{$search}%")
                     ->orWhere('pemohon', 'like', "%{$search}%")
                     ->orWhere('perangkat_daerah', 'like', "%{$search}%")
@@ -411,7 +412,17 @@ class SmkiPerubahanItController extends Controller
 
         // Dropdown nama pengesah (Koordinator Agen, Penanggung Jawab, Agen) diambil dari tabel users
         if ($request->input('scope') === 'all') {
-            $data['pengguna'] = User::query()->orderBy('name')->get(['id', 'name as nama']);
+            $data['pengguna'] = User::query()
+                ->select('users.id', 'users.name as nama')
+                ->withExists(['spesimenTte as punya_spesimen'])
+                ->orderBy('users.name')
+                ->get()
+                ->map(fn ($u) => [
+                    'id'             => $u->id,
+                    'nama'           => $u->nama,
+                    'punya_spesimen' => (bool) $u->punya_spesimen,
+                ])
+                ->values();
         }
 
         return response()->json([
@@ -649,6 +660,7 @@ class SmkiPerubahanItController extends Controller
         $wajib = $submit ? 'required' : 'nullable';
 
         return [
+            'nomor_dokumen'        => ['nullable', 'string', 'max:100'], // BARU
             'judul'                => [$wajib, 'string', 'max:255'],
             'unit_kerja_id'        => [$wajib, 'integer', Rule::exists('master_unit_kerja', 'id_unit_kerja')],
             'perangkat_daerah'     => [$wajib, 'string', 'max:255'],
@@ -694,6 +706,7 @@ class SmkiPerubahanItController extends Controller
     private function namaAtribut(): array
     {
         return [
+            'nomor_dokumen'        => 'Nomor Dokumen', // BARU
             'judul'                => 'Judul Perubahan',
             'unit_kerja_id'        => 'Unit Kerja',
             'perangkat_daerah'     => 'Perangkat Daerah',
