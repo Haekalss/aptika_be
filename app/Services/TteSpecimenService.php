@@ -28,7 +28,7 @@ use GdImage;
 class TteSpecimenService
 {
     /** Versi tata letak — dinaikkan bila bentuk spesimen berubah (memaksa cache baru). */
-    private const LAYOUT_VERSION = 6;
+    private const LAYOUT_VERSION = 7;
 
     /** Margin putih tipis agar garis kotak tidak terpotong (px). */
     private const MARGIN = 3;
@@ -235,9 +235,6 @@ class TteSpecimenService
 
         imagesetthickness($img, 1);
 
-        // --- Sisipkan QR Code di sebelah kiri kotak ---
-        $this->drawQrCode($img, $x1, $y1, $boxH, $d);
-
         // --- Isi kotak (rata kiri pada satu margin) ---
         $x = $x1 + self::PAD_X;
         foreach ($lines as $line) {
@@ -249,42 +246,6 @@ class TteSpecimenService
         }
 
         return $img;
-    }
-
-    /**
-     * Gambar QR Code verifikasi TTE di sebelah kiri dalam kotak spesimen.
-     */
-    private function drawQrCode(GdImage $img, int $x1, int $y1, int $boxH, array $d): void
-    {
-        try {
-            $identifier = !empty($d['nip']) && $d['nip'] !== '-' ? $d['nip'] : ($d['nama'] ?? 'PEJABAT');
-            $qrData = 'https://tte.jabarprov.go.id/verify?id=' . rawurlencode($identifier) . '&doc=SMKI&v=' . ($d['v'] ?? self::LAYOUT_VERSION);
-            
-            $options = new \chillerlan\QRCode\QROptions([
-                'outputInterface' => \chillerlan\QRCode\Output\QRGdImagePNG::class,
-                'outputBase64'    => false,
-                'scale'           => 6,
-                'addQuietzone'    => false,
-            ]);
-
-            $qrcode = new \chillerlan\QRCode\QRCode($options);
-            $qrBinary = $qrcode->render($qrData);
-            $qrImg = imagecreatefromstring($qrBinary);
-
-            if ($qrImg) {
-                $qrW = imagesx($qrImg);
-                $qrH = imagesy($qrImg);
-
-                // Posisi rata tengah secara horizontal di area kiri (PAD_X = 276)
-                $qrX = $x1 + (int) ((self::PAD_X - $qrW) / 2);
-                $qrY = $y1 + (int) (($boxH - $qrH) / 2);
-
-                imagecopy($img, $qrImg, $qrX, $qrY, 0, 0, $qrW, $qrH);
-                imagedestroy($qrImg);
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Gagal menggambar QR Code pada spesimen TTE: ' . $e->getMessage());
-        }
     }
 
     /**
