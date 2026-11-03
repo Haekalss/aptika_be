@@ -24,7 +24,9 @@ return new class extends Migration
             }
         });
 
-        if (Schema::hasColumn('users', 'avatar')) {
+        // Sintaks MODIFY hanya valid di MySQL; lewati di SQLite (phpunit) agar
+        // test suite tetap bisa berjalan. Kolom sudah longText nullable dari atas.
+        if (Schema::hasColumn('users', 'avatar') && DB::getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE users MODIFY avatar LONGTEXT NULL");
         }
     }
