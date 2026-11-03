@@ -147,6 +147,7 @@ class SmkiDaftarAsetVirtualController extends Controller
             'nama_aset' => [$requiredWhenSaved, 'nullable', 'string', 'max:255'],
             'lokasi_aset' => [$requiredWhenSaved, 'nullable', 'string', 'max:255'],
             'rows' => [$requiredWhenSaved, 'array', 'max:200'],
+            'rows.*' => ['array'],
             'rows.*.kode_aset' => ['nullable', 'string', 'max:255'],
             'rows.*.nama_instance' => ['nullable', 'string', 'max:255'],
             'rows.*.deskripsi' => ['nullable', 'string'],

@@ -153,6 +153,45 @@ class SmkiDaftarAsetVirtualTest extends TestCase
         $this->getJson("/api/smki/daftar-aset-virtual/{$id}")->assertNotFound();
     }
 
+    public function test_instance_asset_codes_can_be_omitted_in_drafts_and_saved_forms(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+
+        foreach (['Draf', 'Tersimpan'] as $status) {
+            $row = $this->payload()['rows'][0];
+            unset($row['kode_aset']);
+
+            $this->postJson('/api/smki/daftar-aset-virtual', $this->payload([
+                'status' => $status,
+                'rows' => [$row],
+            ]))
+                ->assertCreated()
+                ->assertJsonPath('data.status', $status)
+                ->assertJsonPath('data.rows.0.kode_aset', '001/TI/APTIKA');
+        }
+
+        $this->assertDatabaseCount('smki_daftar_aset_virtual_instances', 2);
+    }
+
+    public function test_malformed_instance_rows_are_rejected_without_replacing_existing_data(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+        $id = $this->postJson('/api/smki/daftar-aset-virtual', $this->payload())
+            ->assertCreated()
+            ->json('data.id');
+
+        foreach (['not-an-object', 123, null] as $row) {
+            $this->putJson("/api/smki/daftar-aset-virtual/{$id}", ['rows' => [$row]])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['rows.0']);
+        }
+
+        $this->getJson("/api/smki/daftar-aset-virtual/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.nama_instance', 'VM Aplikasi');
+        $this->assertDatabaseCount('smki_daftar_aset_virtual_instances', 1);
+    }
+
     public function test_saved_form_requires_complete_header_and_instance_data(): void
     {
         $this->actingAs($this->account(), 'sanctum');

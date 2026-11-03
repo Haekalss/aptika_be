@@ -56,7 +56,7 @@ class DaftarAsetVirtualService
                     ->map(function (array $row, int $index) use ($data) {
                         $attributes = Arr::only($row, self::INSTANCE_FIELDS);
                         $attributes['urutan'] = $index + 1;
-                        $attributes['kode_aset'] = $attributes['kode_aset'] ?: $this->sequentialAssetCode(
+                        $attributes['kode_aset'] = ($attributes['kode_aset'] ?? null) ?: $this->sequentialAssetCode(
                             $data['kode_aset'] ?? '',
                             $index,
                         );
