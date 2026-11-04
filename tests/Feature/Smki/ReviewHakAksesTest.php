@@ -157,7 +157,7 @@ class ReviewHakAksesTest extends TestCase
         $this->getJson(self::URL.'?per_page=1')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 2)->assertJsonPath('meta.last_page', 2);
         $this->getJson(self::URL.'/lookup')->assertOk()
             ->assertJsonFragment(['id' => $payload['objectId'], 'name' => 'Sistem FR-034'])
-            ->assertJsonFragment(['id' => $payload['reviewerId'], 'name' => 'Pelaksana Uji']);
+            ->assertJsonFragment(['id' => $payload['reviewerId'], 'name' => 'Pelaksana Uji', 'nip' => '123456789012345678']);
         Pegawai::whereKey($payload['reviewerId'])->update(['nama' => 'Nama berubah']);
         $this->getJson(self::URL.'/'.$first['id'])->assertOk()->assertJsonPath('data.reviewer', 'Pelaksana Uji');
     }
@@ -171,5 +171,65 @@ class ReviewHakAksesTest extends TestCase
         $service = DB::table('services')->insertGetId(['code' => 'SMKI', 'name' => 'SMKI', 'created_at' => now(), 'updated_at' => now()]);
         DB::table('bidang_services')->updateOrInsert(['bidang_id' => $user->bidang_id, 'service_id' => $service], ['is_enabled' => false]);
         $this->getJson(self::URL)->assertForbidden();
+    }
+
+    public function test_signer_ids_resolve_master_names_and_nips_and_retain_snapshots(): void
+    {
+        $this->login();
+        $payload = $this->complete();
+        $payload['preparedById'] = $payload['reviewerId'];
+        $payload['acknowledgedById'] = $payload['reviewerId'];
+        $payload['preparedByNip'] = 'NIP palsu';
+        $payload['acknowledgedByNip'] = 'NIP palsu';
+        $id = $this->postJson(self::URL, $payload)->assertCreated()
+            ->assertJsonPath('data.preparedById', $payload['reviewerId'])
+            ->assertJsonPath('data.acknowledgedById', $payload['reviewerId'])
+            ->assertJsonPath('data.preparedBy', 'Pelaksana Uji')
+            ->assertJsonPath('data.acknowledgedBy', 'Pelaksana Uji')
+            ->assertJsonPath('data.preparedByNip', '123456789012345678')
+            ->assertJsonPath('data.acknowledgedByNip', '123456789012345678')->json('data.id');
+        Pegawai::whereKey($payload['reviewerId'])->update(['nama' => 'Nama baru', 'nip' => '999999999999999999']);
+        $this->getJson(self::URL.'/'.$id)->assertOk()
+            ->assertJsonPath('data.preparedBy', 'Pelaksana Uji')
+            ->assertJsonPath('data.preparedByNip', '123456789012345678');
+
+        $payload['preparedById'] = '';
+        $payload['acknowledgedById'] = '';
+        $payload['preparedByNip'] = '111111111111111111';
+        $payload['acknowledgedByNip'] = '222222222222222222';
+        $this->putJson(self::URL.'/'.$id, $payload)->assertOk()
+            ->assertJsonPath('data.preparedById', '')
+            ->assertJsonPath('data.preparedBy', 'Pembuat Uji')
+            ->assertJsonPath('data.preparedByNip', '111111111111111111')
+            ->assertJsonPath('data.acknowledgedByNip', '222222222222222222');
+    }
+
+    public function test_drafts_validate_and_persist_signer_references(): void
+    {
+        $this->login();
+        $payload = $this->complete();
+        $this->postJson(self::URL, ['status' => 'Draf', 'accounts' => [], 'preparedById' => $payload['reviewerId']])
+            ->assertCreated()->assertJsonPath('data.preparedBy', 'Pelaksana Uji')
+            ->assertJsonPath('data.preparedByNip', '123456789012345678');
+        $this->postJson(self::URL, ['status' => 'Draf', 'accounts' => [], 'preparedById' => '999999', 'acknowledgedById' => '999999'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['preparedById', 'acknowledgedById']);
+    }
+
+    public function test_specimen_qr_can_be_disabled_without_changing_the_default(): void
+    {
+        $this->login();
+        $path = tempnam(sys_get_temp_dir(), 'fr034-specimen-');
+        file_put_contents($path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aYJkAAAAASUVORK5CYII='));
+        try {
+            $this->mock(\App\Services\TteResolverService::class, function ($mock) use ($path) {
+                $mock->shouldReceive('imagePath')->once()->with('123', 'Uji', true)->andReturn($path);
+                $mock->shouldReceive('imagePath')->once()->with('123', 'Uji', false)->andReturn($path);
+            });
+            $this->get('/api/tte/resolve/image?nip=123&nama=Uji')->assertOk()->assertHeader('Content-Type', 'image/png');
+            $this->get('/api/tte/resolve/image?nip=123&nama=Uji&include_qr=0')->assertOk()->assertHeader('Content-Type', 'image/png');
+            $this->getJson('/api/tte/resolve/image?nama=Uji&include_qr=invalid')->assertUnprocessable()->assertJsonValidationErrors('include_qr');
+        } finally {
+            unlink($path);
+        }
     }
 }

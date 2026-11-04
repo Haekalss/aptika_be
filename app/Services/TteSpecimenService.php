@@ -74,7 +74,7 @@ class TteSpecimenService
      * @param  string|null    $unit     Nama unit/dinas. Default: "DINAS KOMUNIKASI DAN INFORMATIKA".
      * @return string|null    Path absolut file PNG, atau null bila GD tidak tersedia.
      */
-    public function generate($pegawai, ?string $unit = null): ?string
+    public function generate($pegawai, ?string $unit = null, bool $includeQr = true): ?string
     {
         if (!extension_loaded('gd')) {
             return null;

@@ -23,6 +23,7 @@ class SmkiReviewHakAksesController extends Controller
 {
     private const TEXT_FIELDS = ['documentNumber', 'documentRevision', 'location', 'preparedBy', 'acknowledgedBy'];
     private const DATE_FIELDS = ['documentEffectiveDate', 'periodStart', 'periodEnd', 'reviewDate', 'signedAt'];
+    private const SIGNERS = ['preparedBy', 'acknowledgedBy'];
 
     public function index(Request $request): JsonResponse
     {
@@ -37,7 +38,7 @@ class SmkiReviewHakAksesController extends Controller
     {
         return response()->json(['success' => true, 'data' => [
             'systems' => MasterSistemAplikasi::orderBy('nama_sistem')->get()->map(fn ($item) => ['id' => (string) $item->getKey(), 'name' => $item->nama_sistem]),
-            'employees' => Pegawai::orderBy('nama')->get()->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->nama]),
+            'employees' => Pegawai::orderBy('nama')->get()->map(fn ($item) => ['id' => (string) $item->id, 'name' => $item->nama, 'nip' => $item->nip ?? '']),
         ]]);
     }
 
@@ -99,6 +100,10 @@ class SmkiReviewHakAksesController extends Controller
         ];
         foreach (self::TEXT_FIELDS as $field) $rules[$field] = ['nullable', 'string', 'max:255'];
         foreach (self::DATE_FIELDS as $field) $rules[$field] = ['nullable', 'date_format:Y-m-d'];
+        foreach (self::SIGNERS as $signer) {
+            $rules[$signer.'Id'] = ['nullable', 'integer', 'min:1', Rule::exists('pegawai', 'id')];
+            $rules[$signer.'Nip'] = ['nullable', 'string', 'max:50'];
+        }
         if ($request->filled('periodStart')) $rules['periodEnd'][] = 'after_or_equal:periodStart';
         if ($request->input('status') === 'Tersimpan') {
             foreach ([...self::TEXT_FIELDS, ...self::DATE_FIELDS, 'objectId', 'reviewerId', 'accounts.*.username', 'accounts.*.currentAccess', 'accounts.*.userStatus'] as $field) {
@@ -125,6 +130,13 @@ class SmkiReviewHakAksesController extends Controller
         $employee = !empty($input['reviewerId']) ? Pegawai::findOrFail($input['reviewerId']) : null;
         $payload = [];
         foreach ([...self::TEXT_FIELDS, ...self::DATE_FIELDS, 'followUp'] as $field) $payload[$field] = $input[$field] ?? '';
+        // Retain signer snapshots in the existing JSON payload, including for drafts.
+        foreach (self::SIGNERS as $signer) {
+            $pegawai = !empty($input[$signer.'Id']) ? Pegawai::findOrFail($input[$signer.'Id']) : null;
+            $payload[$signer.'Id'] = $pegawai ? (string) $pegawai->id : '';
+            $payload[$signer.'Nip'] = $pegawai ? ($pegawai->nip ?? '') : trim($input[$signer.'Nip'] ?? '');
+            $payload[$signer] = $pegawai ? $pegawai->nama : trim($payload[$signer]);
+        }
         $payload['accounts'] = array_map(fn ($account) => [
             'id' => $account['id'], 'username' => $account['username'] ?? '',
             'currentAccess' => $account['currentAccess'] ?? '', 'userStatus' => $account['userStatus'] ?? '',
@@ -136,7 +148,7 @@ class SmkiReviewHakAksesController extends Controller
 
     private function present(SmkiReviewHakAkses $review): array
     {
-        return array_merge($review->payload, [
+        return array_merge(['preparedById' => '', 'preparedByNip' => '', 'acknowledgedById' => '', 'acknowledgedByNip' => ''], $review->payload, [
             'id' => (string) $review->id, 'number' => $review->nomor_review,
             'title' => trim('Review Hak Akses '.$review->object_name), 'status' => $review->status,
             'bidangId' => $review->bidang_id, 'bidangName' => $review->bidang_name,
