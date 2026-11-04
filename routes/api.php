@@ -1473,6 +1473,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.komunikasi.destroy',
                 ]);
 
+            // Formulir Review Hak Akses (FR-034)
+            Route::get('review-hak-akses/lookup', [\App\Http\Controllers\Smki\SmkiReviewHakAksesController::class, 'lookup']);
+            Route::apiResource('review-hak-akses', \App\Http\Controllers\Smki\SmkiReviewHakAksesController::class);
+
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);

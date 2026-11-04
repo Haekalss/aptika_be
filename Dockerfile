@@ -9,8 +9,10 @@ RUN apt-get update && apt-get install -y \
     zip \
     libzip-dev \
     libpng-dev \
+    libfreetype6-dev \
     libonig-dev \
     libxml2-dev \
+    && docker-php-ext-configure gd --with-freetype \
     && docker-php-ext-install \
     pdo_mysql \
     mbstring \
@@ -32,6 +34,7 @@ RUN composer install \
     --no-interaction
 
 RUN mkdir -p \
+    storage/app/tte \
     storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \
