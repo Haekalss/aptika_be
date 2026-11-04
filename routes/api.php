@@ -1865,6 +1865,19 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'update'  => 'smki.screening-karyawan.update',
                     'destroy' => 'smki.screening-karyawan.destroy',
                 ]);
+
+            // Matriks Kompetensi SMKI (FR-031)
+            Route::get('matrix-competency/lookup', [\App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class, 'lookup'])
+                ->name('smki.matrix-competency.lookup');
+            Route::apiResource('matrix-competency', \App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class)
+                ->parameters(['matrix-competency' => 'id'])
+                ->names([
+                    'index'   => 'smki.matrix-competency.index',
+                    'store'   => 'smki.matrix-competency.store',
+                    'show'    => 'smki.matrix-competency.show',
+                    'update'  => 'smki.matrix-competency.update',
+                    'destroy' => 'smki.matrix-competency.destroy',
+                ]);
         });
 
     // =================================================                ]);
