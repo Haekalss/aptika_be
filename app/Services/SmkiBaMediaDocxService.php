@@ -110,13 +110,19 @@ class SmkiBaMediaDocxService
             $hasLogo = true;
             $zip->addFile($logoPath, 'word/media/image1.png');
         }
-        $zip->addFromString('word/_rels/document.xml.rels', $this->getDocumentRelsXml($hasLogo));
+
+        // Spesimen TTE penanda tangan (opsional, dilewati bila tidak ada).
+        $tteImages = $this->resolveTteImages($ba);
+        foreach ($tteImages as $mediaName => $binary) {
+            $zip->addFromString('word/media/' . $mediaName, $binary);
+        }
+        $zip->addFromString('word/_rels/document.xml.rels', $this->getDocumentRelsXml($hasLogo, array_keys($tteImages)));
 
         // 4. word/styles.xml
         $zip->addFromString('word/styles.xml', $this->getStylesXml());
 
         // 5. word/document.xml
-        $documentXml = $this->buildDocumentXml($ba, $options, $hasLogo);
+        $documentXml = $this->buildDocumentXml($ba, $options, $hasLogo, $tteImages);
         $zip->addFromString('word/document.xml', $documentXml);
 
         $zip->close();
@@ -153,16 +159,24 @@ class SmkiBaMediaDocxService
     /**
      * XML untuk word/_rels/document.xml.rels
      */
-    protected function getDocumentRelsXml(bool $hasLogo): string
+    protected function getDocumentRelsXml(bool $hasLogo, array $tteMedia = []): string
     {
         $imageRel = $hasLogo
             ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
             : '';
 
+        $tteRels = '';
+        $n = 3;
+        foreach ($tteMedia as $mediaName) {
+            $tteRels .= '<Relationship Id="rIdTte' . $n . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' . htmlspecialchars($mediaName, ENT_XML1, 'UTF-8') . '"/>';
+            $n++;
+        }
+
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   ' . $imageRel . '
+  ' . $tteRels . '
 </Relationships>';
     }
 
@@ -192,9 +206,93 @@ class SmkiBaMediaDocxService
     }
 
     /**
+     * Resolve gambar spesimen TTE kedua penanda tangan.
+     * @return array<string,string> mediaName => binary PNG
+     */
+    protected function resolveTteImages(BeritaAcara $ba): array
+    {
+        $out = [];
+        $pairs = [
+            'tte_pelaksana.png' => [(string) ($ba->nip_pelaksana ?? ''), (string) $ba->nama_pelaksana_display],
+            'tte_diketahui.png' => [(string) ($ba->nip_diketahui ?? ''), (string) $ba->nama_diketahui_display],
+        ];
+        foreach ($pairs as $mediaName => [$nip, $nama]) {
+            try {
+                $path = app(\App\Services\TteResolverService::class)->imagePath($nip, $nama);
+            } catch (\Throwable $e) {
+                $path = null;
+            }
+            if ($path && is_file($path)) {
+                $binary = @file_get_contents($path);
+                if ($binary !== false && $binary !== '') {
+                    $out[$mediaName] = $binary;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Paragraf gambar TTE (inline, rata tengah) untuk sel tanda tangan,
+     * atau paragraf spasi bila tidak ada gambar (ruang TTD manual).
+     */
+    /**
+     * Blok gambar TTE atau, bila tidak ada gambar, blok nama + NIP teks.
+     * Pola FR-008: nama/NIP teks tidak ditulis bila gambar berhasil disisipkan.
+     */
+    protected function tteOrNameBlock(array $tteImages, string $mediaName, string $nama, string $nip): string
+    {
+        if (isset($tteImages[$mediaName])) {
+            return $this->tteDrawingXml($tteImages, $mediaName);
+        }
+
+        $out = '<w:p><w:pPr><w:spacing w:before="900" w:after="0"/></w:pPr></w:p>';
+        $out .= '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>'
+            . '<w:r><w:rPr><w:b/><w:u w:val="single"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>'
+            . htmlspecialchars($nama, ENT_XML1, 'UTF-8') . '</w:t></w:r></w:p>';
+        if ($nip !== '') {
+            $out .= '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>'
+                . '<w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>NIP. '
+                . htmlspecialchars($nip, ENT_XML1, 'UTF-8') . '</w:t></w:r></w:p>';
+        }
+
+        return $out;
+    }
+
+    protected function tteDrawingXml(array $tteImages, string $mediaName): string
+    {
+        if (!isset($tteImages[$mediaName])) {
+            return '<w:p><w:pPr><w:spacing w:before="900" w:after="0"/></w:pPr></w:p>';
+        }
+
+        $relId = 'rIdTte' . (3 + array_search($mediaName, array_keys($tteImages), true));
+        $uid = 10 + (int) array_search($mediaName, array_keys($tteImages), true);
+        $size = @getimagesizefromstring($tteImages[$mediaName]);
+        $wPx = 270;
+        $hPx = ($size && $size[0] > 0) ? (int) round($wPx * $size[1] / $size[0]) : 70;
+        $cx = $wPx * 9525;
+        $cy = max(1, $hPx) * 9525;
+
+        return '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="60"/></w:pPr><w:r><w:drawing>'
+            . '<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
+            . '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+            . '<wp:docPr id="' . $uid . '" name="' . htmlspecialchars($mediaName, ENT_XML1, 'UTF-8') . '"/>'
+            . '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            . '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            . '<pic:pic><pic:nvPicPr><pic:cNvPr id="' . (100 + $uid) . '" name="tte.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+            . '<pic:blipFill><a:blip r:embed="' . $relId . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm>'
+            . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+            . '</pic:pic></a:graphicData></a:graphic>'
+            . '</wp:inline></w:drawing></w:r></w:p>';
+    }
+
+    /**
      * Rakit XML utama untuk word/document.xml
      */
-    protected function buildDocumentXml(BeritaAcara $ba, array $options, bool $hasLogo): string
+    protected function buildDocumentXml(BeritaAcara $ba, array $options, bool $hasLogo, array $tteImages = []): string
     {
         $noDokumen = $options['no_dokumen'] ?? ($ba->nomor_dokumen ?: 'FR014-SMKI');
         $noRevisi = $options['no_revisi'] ?? '1.0';
@@ -204,7 +302,9 @@ class SmkiBaMediaDocxService
         $alasanText = $ba->alasan_penghancuran ?: 'Media/perangkat tersebut dilakukan penghancuran atau disposal karena mengalami kerusakan, sudah tidak digunakan, dan sebagian data di dalamnya sudah tidak diperlukan. Kegiatan penghancuran dilakukan untuk mencegah penggunaan kembali perangkat serta mengurangi risiko akses terhadap informasi yang tersimpan pada media.';
 
         $namaPelaksana = $ba->nama_pelaksana_display;
+        $nipPelaksana = trim((string) ($ba->nip_pelaksana ?? ''));
         $namaDiketahui = $ba->nama_diketahui_display;
+        $nipDiketahui = trim((string) ($ba->nip_diketahui ?? ''));
 
         // Pastikan relasi detailMedia termuat
         $mediaList = $ba->detailMedia ?? collect();
@@ -573,12 +673,7 @@ class SmkiBaMediaDocxService
           <w:p>
             <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
             <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Pelaksana,</w:t></w:r>
-          </w:p>
-          <w:p><w:pPr><w:spacing w:before="900" w:after="0"/></w:pPr></w:p>
-          <w:p>
-            <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
-            <w:r><w:rPr><w:b/><w:u w:val="single"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>' . htmlspecialchars($namaPelaksana, ENT_XML1, 'UTF-8') . '</w:t></w:r>
-          </w:p>
+          </w:p>' . $this->tteOrNameBlock($tteImages, 'tte_pelaksana.png', $namaPelaksana, $nipPelaksana) . '
           <w:p>
             <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
             <w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Unit Pelaksana Teknis</w:t></w:r>
@@ -591,12 +686,7 @@ class SmkiBaMediaDocxService
           <w:p>
             <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
             <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Yang Mengetahui,</w:t></w:r>
-          </w:p>
-          <w:p><w:pPr><w:spacing w:before="900" w:after="0"/></w:pPr></w:p>
-          <w:p>
-            <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
-            <w:r><w:rPr><w:b/><w:u w:val="single"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>' . htmlspecialchars($namaDiketahui, ENT_XML1, 'UTF-8') . '</w:t></w:r>
-          </w:p>
+          </w:p>' . $this->tteOrNameBlock($tteImages, 'tte_diketahui.png', $namaDiketahui, $nipDiketahui) . '
           <w:p>
             <w:pPr><w:jc w:val="center"/><w:spacing w:after="0"/></w:pPr>
             <w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Pengawas / Penanggung Jawab</w:t></w:r>

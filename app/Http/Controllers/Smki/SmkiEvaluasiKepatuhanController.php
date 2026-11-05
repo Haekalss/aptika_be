@@ -84,6 +84,8 @@ class SmkiEvaluasiKepatuhanController extends Controller
     {
         return $request->validate([
             'tanggal_evaluasi'            => 'required|date',
+            'nama_penandatangan'          => 'nullable|string|max:255',
+            'nip_penandatangan'           => 'nullable|string|max:50',
             'ditandatangani_di'           => 'nullable|string|max:255',
             'tanggal_ttd'                 => 'nullable|date',
             'items'                       => 'required|array|min:1',
@@ -118,6 +120,8 @@ class SmkiEvaluasiKepatuhanController extends Controller
         $evaluasi = DB::transaction(function () use ($validated) {
             $evaluasi = SmkiEvaluasiKepatuhan::create([
                 'tanggal_evaluasi'  => $validated['tanggal_evaluasi'],
+                'nama_penandatangan' => $validated['nama_penandatangan'] ?? null,
+                'nip_penandatangan'  => $validated['nip_penandatangan'] ?? null,
                 'ditandatangani_di' => $validated['ditandatangani_di'] ?? null,
                 'tanggal_ttd'       => $validated['tanggal_ttd'] ?? null,
                 'user_id'           => auth()->id(),
@@ -149,6 +153,8 @@ class SmkiEvaluasiKepatuhanController extends Controller
         DB::transaction(function () use ($evaluasi, $validated) {
             $evaluasi->update([
                 'tanggal_evaluasi'  => $validated['tanggal_evaluasi'],
+                'nama_penandatangan' => $validated['nama_penandatangan'] ?? null,
+                'nip_penandatangan'  => $validated['nip_penandatangan'] ?? null,
                 'ditandatangani_di' => $validated['ditandatangani_di'] ?? null,
                 'tanggal_ttd'       => $validated['tanggal_ttd'] ?? null,
             ]);

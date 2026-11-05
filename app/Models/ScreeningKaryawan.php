@@ -23,6 +23,14 @@ class ScreeningKaryawan extends Model
         'tanggal_screening',
         'kesimpulan',
         'catatan',
+        'nama_verifikator',
+        'nip_verifikator',
+        'ditandatangani_di',
+        'tanggal_ttd',
+    ];
+
+    protected $casts = [
+        'tanggal_ttd' => 'date',
     ];
 
     public function jabatan(): BelongsTo

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\SmkiDrpEvaluasi;
 use App\Services\Concerns\FillsDocxTemplate;
+use App\Services\Concerns\InsertsTteImage;
 use DOMDocument;
 use DOMNode;
 use DOMXPath;
@@ -21,6 +22,7 @@ use ZipArchive;
 class SmkiDrpEvaluasiDocxService
 {
     use FillsDocxTemplate;
+    use InsertsTteImage;
 
     /** Lebar area isi (twip): A4 11900 - margin kiri 720 - margin kanan 720. */
     private const CONTENT_WIDTH = 10460;
@@ -87,7 +89,8 @@ class SmkiDrpEvaluasiDocxService
         $this->fillInfo($dom, $xp, $tables->item(0), $evaluasi);
         $this->fillWaktu($dom, $xp, $tables->item(0), $evaluasi);
         $this->fillProsesDanTim($dom, $xp, $tables->item(1), $evaluasi);
-        $this->fillSignature($dom, $xp, $tables->item(3), $evaluasi);
+        $hasTte = $this->fillTteImages($dom, $xp, $zip, $tables->item(3), $evaluasi);
+        $this->fillSignature($dom, $xp, $tables->item(3), $evaluasi, $hasTte);
         $this->fillLampiran($dom, $xp, $evaluasi);
         $this->applyLayout($xp, $tables);
         $zip->addFromString('word/document.xml', $dom->saveXML());
@@ -352,27 +355,32 @@ class SmkiDrpEvaluasiDocxService
     // Tanda tangan & lampiran
     // ------------------------------------------------------------------
 
-    private function fillSignature(DOMDocument $dom, DOMXPath $xp, DOMNode $table, SmkiDrpEvaluasi $e): void
+    private function fillSignature(DOMDocument $dom, DOMXPath $xp, DOMNode $table, SmkiDrpEvaluasi $e, array $tteOk = []): void
     {
         $rows = $xp->query('w:tr', $table);
         if ($rows->length < 3) {
             throw new Exception('Tabel tanda tangan pada template FR-039 tidak valid.');
         }
         $people = [
-            [$e->dibuat_oleh_nama, $e->dibuat_oleh_tanggal],
-            [$e->diperiksa_oleh_nama, $e->diperiksa_oleh_tanggal],
-            [$e->disetujui_oleh_nama, $e->disetujui_oleh_tanggal],
+            [$e->dibuat_oleh_nama, $e->dibuat_oleh_tanggal, $e->dibuat_oleh_nip],
+            [$e->diperiksa_oleh_nama, $e->diperiksa_oleh_tanggal, $e->diperiksa_oleh_nip],
+            [$e->disetujui_oleh_nama, $e->disetujui_oleh_tanggal, $e->disetujui_oleh_nip],
         ];
         $dateCells = $xp->query('w:tc', $rows->item(1));
         $signCells = $xp->query('w:tc', $rows->item(2));
-        foreach ($people as $i => [$nama, $tanggal]) {
+        foreach ($people as $i => [$nama, $tanggal, $nip]) {
             if ($tanggal && $i < $dateCells->length) {
                 $p = $xp->query('w:p', $dateCells->item($i))->item(0);
                 if ($p) {
                     $this->setParagraphText($dom, $xp, $p, 'Tanggal: ' . $this->tanggalIndo($tanggal));
                 }
             }
+            // Pola FR-008: nama/NIP teks dilewati bila gambar TTE sudah tersisip.
+            if (!empty($tteOk[$i])) {
+                continue;
+            }
             $nama = trim((string) $nama);
+            $nip = trim((string) $nip);
             if ($nama !== '' && $i < $signCells->length) {
                 $cell = $signCells->item($i);
                 $tcPr = $xp->query('w:tcPr', $cell)->item(0);
@@ -384,8 +392,60 @@ class SmkiDrpEvaluasiDocxService
                 $p = $xp->query('w:p', $cell)->item(0);
                 $rPr = $this->dataRPr($dom, 22);
                 $this->setParagraphText($dom, $xp, $p, '(' . $nama . ')', 'center', $rPr);
+                if ($nip !== '') {
+                    $nipPara = $p->cloneNode(true);
+                    $this->setParagraphText($dom, $xp, $nipPara, 'NIP. ' . $nip, 'center', $rPr);
+                    $p->parentNode->insertBefore($nipPara, $p->nextSibling);
+                }
             }
         }
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE di atas sel tanda tangan tiap peran.
+     * Dipanggil SEBELUM fillSignature agar sel target masih teridentifikasi.
+     *
+     * @return array<int,bool> indeks peran yang gambarnya berhasil disisipkan.
+     */
+    private function fillTteImages(DOMDocument $dom, DOMXPath $xp, ZipArchive $zip, DOMNode $table, SmkiDrpEvaluasi $e): array
+    {
+        $people = [
+            [trim((string) $e->dibuat_oleh_nama), trim((string) $e->dibuat_oleh_nip)],
+            [trim((string) $e->diperiksa_oleh_nama), trim((string) $e->diperiksa_oleh_nip)],
+            [trim((string) $e->disetujui_oleh_nama), trim((string) $e->disetujui_oleh_nip)],
+        ];
+
+        $rows = $xp->query('w:tr', $table);
+        if ($rows->length < 3) {
+            return [];
+        }
+        $signCells = $xp->query('w:tc', $rows->item(2));
+        if ($signCells->length === 0) {
+            return [];
+        }
+
+        $ok = [];
+        foreach ($people as $i => [$nama, $nip]) {
+            if (($nama === '' && $nip === '') || $i >= $signCells->length) {
+                continue;
+            }
+            $path = $this->resolveTtePath($nip, $nama);
+            if ($path === null) {
+                continue;
+            }
+            $cell = $signCells->item($i);
+            $firstPara = $xp->query('w:p', $cell)->item(0);
+            if (!$firstPara) {
+                continue;
+            }
+            $imgPara = $this->tteImageParagraph($dom, 'center');
+            if ($this->insertTteImage($zip, $dom, $xp, $imgPara, $path, 170)) {
+                $firstPara->parentNode->insertBefore($imgPara, $firstPara);
+                $ok[$i] = true;
+            }
+        }
+
+        return $ok;
     }
 
     /** Teks lampiran ditulis pada paragraf kosong di bawah judul "Lampiran Laporan Pengujian DRP". */

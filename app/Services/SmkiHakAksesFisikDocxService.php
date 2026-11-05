@@ -232,22 +232,31 @@ class SmkiHakAksesFisikDocxService
             elseif ($text === 'Atasan Pemohon,') {
                 if (isset($pMap[$idx + 7])) {
                     $namaAtasan = $form->atasan_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAtasan ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->atasan_nip, $namaAtasan, 'Atasan Langsung Pemohon');
+                    // Pola FR-008: nama teks hanya ditulis bila gambar TTE gagal disisipkan.
+                    $ok = $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->atasan_nip, $namaAtasan, 'Atasan Langsung Pemohon');
+                    if (!$ok) {
+                        $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAtasan ?: '……………………………') . " )", 'center');
+                    }
                 }
             }
             elseif ($text === 'Penanggung Jawab Perangkat,') {
                 if (isset($pMap[$idx + 7])) {
                     $namaPJ = $form->penanggung_jawab_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaPJ ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->penanggung_jawab_nip, $namaPJ, 'Penanggung Jawab Perangkat');
+                    // Pola FR-008: nama teks hanya ditulis bila gambar TTE gagal disisipkan.
+                    $ok = $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->penanggung_jawab_nip, $namaPJ, 'Penanggung Jawab Perangkat');
+                    if (!$ok) {
+                        $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaPJ ?: '……………………………') . " )", 'center');
+                    }
                 }
             }
             elseif ($text === 'Agen,') {
                 if (isset($pMap[$idx + 7])) {
                     $namaAgen = $form->agen_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAgen ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->agen_nip, $namaAgen, 'Agen Pelaksana');
+                    // Pola FR-008: nama teks hanya ditulis bila gambar TTE gagal disisipkan.
+                    $ok = $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->agen_nip, $namaAgen, 'Agen Pelaksana');
+                    if (!$ok) {
+                        $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAgen ?: '……………………………') . " )", 'center');
+                    }
                 }
             }
         }
@@ -260,14 +269,15 @@ class SmkiHakAksesFisikDocxService
 
     /**
      * Sisipkan gambar spesimen TTE dinamis resmi sesuai NIP dan Nama pejabat/pemohon.
+     * Mengembalikan true bila gambar berhasil disisipkan.
      */
-    private function tryInsertTte(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, $paragraphNode, ?string $nip, ?string $nama, ?string $fallbackJabatan = null): void
+    private function tryInsertTte(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, $paragraphNode, ?string $nip, ?string $nama, ?string $fallbackJabatan = null): bool
     {
         $nip = trim((string) $nip);
         $nama = trim((string) $nama);
 
         if ($nip === '' && $nama === '') {
-            return;
+            return false;
         }
 
         try {
@@ -302,10 +312,14 @@ class SmkiHakAksesFisikDocxService
                 $pPr->appendChild($jc);
 
                 // Sisipkan gambar spesimen
-                $this->insertImageIntoParagraph($zip, $dom, $xp, $paragraphNode, $imgPath, 140);
+                if ($this->insertImageIntoParagraph($zip, $dom, $xp, $paragraphNode, $imgPath, 200)) {
+                    return true;
+                }
             }
         } catch (\Throwable $e) {
             // Ignore error agar proses docx tetap berjalan lancar
         }
+
+        return false;
     }
 }

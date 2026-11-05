@@ -110,10 +110,13 @@ class SmkiDrpEvaluasiController extends Controller
             'checklist.*'        => 'nullable|boolean',
             'lampiran'           => 'nullable|string',
             'dibuat_oleh_nama'       => 'nullable|string|max:255',
+            'dibuat_oleh_nip'        => 'nullable|string|max:50',
             'dibuat_oleh_tanggal'    => 'nullable|date',
             'diperiksa_oleh_nama'    => 'nullable|string|max:255',
+            'diperiksa_oleh_nip'     => 'nullable|string|max:50',
             'diperiksa_oleh_tanggal' => 'nullable|date',
             'disetujui_oleh_nama'    => 'nullable|string|max:255',
+            'disetujui_oleh_nip'     => 'nullable|string|max:50',
             'disetujui_oleh_tanggal' => 'nullable|date',
 
             'waktu'                  => 'nullable|array',

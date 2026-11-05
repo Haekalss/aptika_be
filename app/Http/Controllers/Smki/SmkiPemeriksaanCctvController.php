@@ -126,6 +126,9 @@ class SmkiPemeriksaanCctvController extends Controller
                 'lingkup'             => $last->lingkup,
                 'perangkat_perekaman' => $last->perangkat_perekaman,
                 'nama_pemeriksa'      => $last->nama_pemeriksa,
+                'nip_pemeriksa'       => $last->nip_pemeriksa,
+                'ditandatangani_di'  => $last->ditandatangani_di,
+                'tanggal_ttd'         => $last->tanggal_ttd ? $last->tanggal_ttd->format('Y-m-d') : null,
                 'tanggal_pemeriksaan' => $last->tanggal_pemeriksaan->format('Y-m-d'),
                 'items'               => $last->items->map(fn($i) => [
                     'kode_cctv' => $i->kode_cctv,
@@ -145,6 +148,9 @@ class SmkiPemeriksaanCctvController extends Controller
             'tanggal_pemeriksaan'      => 'required|date',
             'kesesuaian_waktu'         => 'required|in:Sesuai,Tidak Sesuai',
             'nama_pemeriksa'           => 'nullable|string|max:255',
+            'nip_pemeriksa'            => 'nullable|string|max:50',
+            'ditandatangani_di'        => 'nullable|string|max:255',
+            'tanggal_ttd'              => 'nullable|date',
             'items'                    => 'required|array|min:1',
             'items.*.kode_cctv'        => 'required|string|max:100',
             'items.*.nama_cctv'        => 'required|string|max:255',
@@ -196,6 +202,9 @@ class SmkiPemeriksaanCctvController extends Controller
                 'tanggal_pemeriksaan' => $v['tanggal_pemeriksaan'],
                 'kesesuaian_waktu'    => $v['kesesuaian_waktu'],
                 'nama_pemeriksa'      => $v['nama_pemeriksa'] ?? null,
+                'nip_pemeriksa'       => $v['nip_pemeriksa'] ?? null,
+                'ditandatangani_di'  => $v['ditandatangani_di'] ?? null,
+                'tanggal_ttd'         => $v['tanggal_ttd'] ?? null,
                 'user_id'             => auth()->id(),
                 'bidang_id'           => auth()->user()?->bidang_id,
             ]);
@@ -229,6 +238,9 @@ class SmkiPemeriksaanCctvController extends Controller
                 'tanggal_pemeriksaan' => $v['tanggal_pemeriksaan'],
                 'kesesuaian_waktu'    => $v['kesesuaian_waktu'],
                 'nama_pemeriksa'      => $v['nama_pemeriksa'] ?? null,
+                'nip_pemeriksa'       => $v['nip_pemeriksa'] ?? null,
+                'ditandatangani_di'  => $v['ditandatangani_di'] ?? null,
+                'tanggal_ttd'         => $v['tanggal_ttd'] ?? null,
             ]);
             $this->syncItems($pemeriksaan, $v['items']);
         });

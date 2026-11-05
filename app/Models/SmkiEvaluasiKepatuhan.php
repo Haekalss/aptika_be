@@ -18,6 +18,8 @@ class SmkiEvaluasiKepatuhan extends Model
         'bidang_id',
         'user_id',
         'tanggal_evaluasi',
+        'nama_penandatangan',
+        'nip_penandatangan',
         'ditandatangani_di',
         'tanggal_ttd',
     ];

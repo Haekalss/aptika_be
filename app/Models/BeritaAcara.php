@@ -24,7 +24,9 @@ class BeritaAcara extends Model
         'id_pelaksana',
         'id_diketahui',
         'nama_pelaksana',
+        'nip_pelaksana',
         'nama_diketahui',
+        'nip_diketahui',
         'bidang_id',
     ];
 
@@ -37,7 +39,9 @@ class BeritaAcara extends Model
 
     protected $appends = [
         'nama_pelaksana_display',
+        'nip_pelaksana_display',
         'nama_diketahui_display',
+        'nip_diketahui_display',
         'total_media_items',
     ];
 
@@ -86,6 +90,11 @@ class BeritaAcara extends Model
         return $this->pelaksana?->name ?? 'Belum Ditentukan';
     }
 
+    public function getNipPelaksanaDisplayAttribute(): ?string
+    {
+        return $this->nip_pelaksana ?? null;
+    }
+
     /**
      * Nama pejabat/pengawas yang mengetahui.
      */
@@ -95,6 +104,11 @@ class BeritaAcara extends Model
             return $this->nama_diketahui;
         }
         return $this->diketahui?->name ?? 'Belum Ditentukan';
+    }
+
+    public function getNipDiketahuiDisplayAttribute(): ?string
+    {
+        return $this->nip_diketahui ?? null;
     }
 
     /**
