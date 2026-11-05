@@ -1492,6 +1492,20 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
                 ->parameters(['removable-media' => 'removable_media']);
 
+            // Capacity Planning (FR-026)
+            Route::get('capacity-planning/export-data', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'exportData'])
+                ->name('smki.capacity-planning.export-data');
+            Route::get('capacity-planning', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'index'])
+                ->name('smki.capacity-planning.index');
+            Route::post('capacity-planning/assets', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'store'])
+                ->name('smki.capacity-planning.assets.store');
+            Route::put('capacity-planning/assets/{asset}', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'update'])
+                ->name('smki.capacity-planning.assets.update');
+            Route::delete('capacity-planning/assets/{asset}', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'destroy'])
+                ->name('smki.capacity-planning.assets.destroy');
+            Route::put('capacity-planning/assets/{asset}/logs', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'saveLog'])
+                ->name('smki.capacity-planning.logs.save');
+
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
             Route::apiResource('software-standar', \App\Http\Controllers\Smki\SmkiSoftwareStandarController::class);
