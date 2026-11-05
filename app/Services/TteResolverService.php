@@ -46,7 +46,7 @@ class TteResolverService
     }
 
     /** Path file PNG spesimen, atau null bila tidak ada / gagal render. */
-    public function imagePath(string $nip, string $nama): ?string
+    public function imagePath(string $nip, string $nama, bool $includeQr = true): ?string
     {
         $nip = trim($nip);
         $nama = trim($nama);
@@ -63,7 +63,7 @@ class TteResolverService
 
         $pegawai = $this->find($nip, $searchNama);
         if ($pegawai !== null) {
-            return $this->renderer->generate($pegawai, null);
+            return $this->renderer->generate($pegawai, null, $includeQr);
         }
 
         // Fallback: Jika tidak ditemukan di master pegawai, coba cari di tabel users atau buat spesimen dari nama
@@ -83,7 +83,7 @@ class TteResolverService
                 'pangkat' => 'Penata Muda / IIIa',
             ];
 
-            return $this->renderer->generate($payload, null);
+            return $this->renderer->generate($payload, null, $includeQr);
         }
 
         return null;

@@ -62,7 +62,7 @@ use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\ActiveSessionController;
 use App\Http\Controllers\Admin\AdminStatsController;
 
-// TAMBAHAN BARU: Import Controller Aset Sistem Informasi
+use App\Http\Controllers\SmkiSpesimenTteController;
 use App\Http\Controllers\Api\AsetSistemInformasiController;
 
 // Route::post('/register', [RegisteredUserController::class, 'store']);
@@ -1473,6 +1473,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.komunikasi.destroy',
                 ]);
 
+            // Formulir Review Hak Akses (FR-034)
+            Route::get('review-hak-akses/lookup', [\App\Http\Controllers\Smki\SmkiReviewHakAksesController::class, 'lookup']);
+            Route::apiResource('review-hak-akses', \App\Http\Controllers\Smki\SmkiReviewHakAksesController::class);
+
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
@@ -1486,6 +1490,41 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::get('tindakan-perbaikan/{tindakanPerbaikan}/export-pdf-data', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanExportController::class, 'pdfData']);
             Route::apiResource('tindakan-perbaikan', \App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class)
                 ->parameters(['tindakan-perbaikan' => 'tindakanPerbaikan']);
+
+            // Evaluasi Kinerja Penyedia Barang/Jasa (FR-021)
+            Route::get('evaluasi-penyedia/master', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'master'])
+                ->name('smki.evaluasi-penyedia.master');
+            Route::get('evaluasi-penyedia/admins', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'admins'])
+                ->name('smki.evaluasi-penyedia.admins');
+            Route::get('evaluasi-penyedia/{evaluasiPenyedia}/riwayat', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'riwayat'])
+                ->name('smki.evaluasi-penyedia.riwayat');
+            Route::get('evaluasi-penyedia/{evaluasiPenyedia}/riwayat/{log}/penilaian', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'snapshot'])
+                ->name('smki.evaluasi-penyedia.snapshot');
+            Route::put('evaluasi-penyedia/{evaluasiPenyedia}/identifikasi', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'updateIdentifikasi'])
+                ->name('smki.evaluasi-penyedia.identifikasi');
+            Route::put('evaluasi-penyedia/{evaluasiPenyedia}/penilaian', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'updatePenilaian'])
+                ->name('smki.evaluasi-penyedia.penilaian');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/hitung', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'hitung'])
+                ->name('smki.evaluasi-penyedia.hitung');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/ajukan', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'ajukan'])
+                ->name('smki.evaluasi-penyedia.ajukan');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/setujui', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'setujui'])
+                ->name('smki.evaluasi-penyedia.setujui');
+            Route::post('evaluasi-penyedia/{evaluasiPenyedia}/kembalikan', [\App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class, 'kembalikan'])
+                ->name('smki.evaluasi-penyedia.kembalikan');
+            Route::apiResource('evaluasi-penyedia', \App\Http\Controllers\Smki\SmkiEvaluasiPenyediaController::class)
+                ->parameters(['evaluasi-penyedia' => 'evaluasiPenyedia'])
+                ->only(['index', 'store', 'show', 'destroy'])
+                ->names([
+                    'index' => 'smki.evaluasi-penyedia.index',
+                    'store' => 'smki.evaluasi-penyedia.store',
+                    'show' => 'smki.evaluasi-penyedia.show',
+                    'destroy' => 'smki.evaluasi-penyedia.destroy',
+                ]);
+            Route::get('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'lookup'])
+                ->name('smki.penyedia.lookup');
+            Route::post('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'store'])
+                ->name('smki.penyedia.store');
 
             Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
             Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
@@ -1505,6 +1544,16 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                 ->name('smki.capacity-planning.assets.destroy');
             Route::put('capacity-planning/assets/{asset}/logs', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'saveLog'])
                 ->name('smki.capacity-planning.logs.save');
+            // Daftar Aset Virtual (FR-035)
+            Route::apiResource('daftar-aset-virtual', \App\Http\Controllers\Smki\SmkiDaftarAsetVirtualController::class)
+                ->parameters(['daftar-aset-virtual' => 'daftar_aset_virtual'])
+                ->names([
+                    'index' => 'smki.daftar-aset-virtual.index',
+                    'store' => 'smki.daftar-aset-virtual.store',
+                    'show' => 'smki.daftar-aset-virtual.show',
+                    'update' => 'smki.daftar-aset-virtual.update',
+                    'destroy' => 'smki.daftar-aset-virtual.destroy',
+                ]);
 
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
@@ -1655,7 +1704,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('perubahan-it/{id}/aksi', [\App\Http\Controllers\Smki\SmkiPerubahanItController::class, 'aksi']);
             Route::apiResource('perubahan-it', \App\Http\Controllers\Smki\SmkiPerubahanItController::class)
                 ->parameters(['perubahan-it' => 'id']);
-                
+
+            Route::prefix('spesimen-tte')->group(function () {
+                Route::get('saya', [SmkiSpesimenTteController::class, 'saya']);
+                Route::post('/', [SmkiSpesimenTteController::class, 'simpan']);
+                Route::delete('/', [SmkiSpesimenTteController::class, 'hapus']);
+                Route::get('{userId}', [SmkiSpesimenTteController::class, 'tampil'])->whereNumber('userId');
+            });
+                            
             // Formulir Hardening Pengecekan Aset (FR-047)
             Route::get('formulir-hardening/lookup', [\App\Http\Controllers\Smki\SmkiFormulirHardeningController::class, 'lookup'])
                 ->name('smki.formulir-hardening.lookup');
@@ -1668,6 +1724,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.formulir-hardening.show',
                     'update'  => 'smki.formulir-hardening.update',
                     'destroy' => 'smki.formulir-hardening.destroy',
+                ]);
+
+                // Formulir Aset Informasi (FR-028)
+            Route::get('aset-informasi/{id}/export-excel', [\App\Http\Controllers\Smki\SmkiAsetInformasiController::class, 'exportExcel'])
+                ->name('smki.aset-informasi.export-excel');
+            Route::apiResource('aset-informasi', \App\Http\Controllers\Smki\SmkiAsetInformasiController::class)
+                ->names([
+                    'index'   => 'smki.aset-informasi.index',
+                    'store'   => 'smki.aset-informasi.store',
+                    'show'    => 'smki.aset-informasi.show',
+                    'update'  => 'smki.aset-informasi.update',
+                    'destroy' => 'smki.aset-informasi.destroy',
                 ]);
 
             // Formulir Rencana Audit (F05-SMKI)
@@ -1813,6 +1881,19 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.screening-karyawan.show',
                     'update'  => 'smki.screening-karyawan.update',
                     'destroy' => 'smki.screening-karyawan.destroy',
+                ]);
+
+            // Matriks Kompetensi SMKI (FR-031)
+            Route::get('matrix-competency/lookup', [\App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class, 'lookup'])
+                ->name('smki.matrix-competency.lookup');
+            Route::apiResource('matrix-competency', \App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class)
+                ->parameters(['matrix-competency' => 'id'])
+                ->names([
+                    'index'   => 'smki.matrix-competency.index',
+                    'store'   => 'smki.matrix-competency.store',
+                    'show'    => 'smki.matrix-competency.show',
+                    'update'  => 'smki.matrix-competency.update',
+                    'destroy' => 'smki.matrix-competency.destroy',
                 ]);
         });
 

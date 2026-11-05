@@ -102,14 +102,15 @@ class TteResolverController extends Controller
     }
 
     /**
-     * GET /api/tte/resolve/image?nip=...&nama=...
+     * GET /api/tte/resolve/image?nip=...&nama=...&include_qr=0
      */
     public function image(Request $request)
     {
         $nip = trim((string) $request->query('nip', ''));
         $nama = trim((string) $request->query('nama', ''));
 
-        $path = $this->resolver->imagePath($nip, $nama);
+        $request->validate(['include_qr' => ['sometimes', 'boolean']]);
+        $path = $this->resolver->imagePath($nip, $nama, $request->boolean('include_qr', true));
 
         if ($path === null) {
             return response()->json([

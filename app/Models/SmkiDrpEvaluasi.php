@@ -44,10 +44,13 @@ class SmkiDrpEvaluasi extends Model
         'checklist',
         'lampiran',
         'dibuat_oleh_nama',
+        'dibuat_oleh_nip',
         'dibuat_oleh_tanggal',
         'diperiksa_oleh_nama',
+        'diperiksa_oleh_nip',
         'diperiksa_oleh_tanggal',
         'disetujui_oleh_nama',
+        'disetujui_oleh_nip',
         'disetujui_oleh_tanggal',
     ];
 

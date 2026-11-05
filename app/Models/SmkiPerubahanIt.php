@@ -40,6 +40,7 @@ class SmkiPerubahanIt extends Model
 
     /** Kolom isian formulir yang boleh diisi/diubah oleh Pemohon. */
     public const FORM_FIELDS = [
+        'nomor_dokumen', // BARU
         'judul',
         'unit_kerja_id',
         'perangkat_daerah',

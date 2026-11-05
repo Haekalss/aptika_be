@@ -45,7 +45,7 @@ return new class extends Migration
                 $table->id();
                 $table->string('nomor_dokumen', 100);
                 $table->date('tanggal_pengajuan');
-                $table->foreignId('pegawai_id')->nullable()->constrained('pegawai')->nullOnDelete();
+                $table->unsignedBigInteger('pegawai_id')->nullable();
                 $table->string('nama_pemohon', 150);
                 $table->string('nip', 50)->nullable();
                 $table->string('jabatan', 100)->nullable();
@@ -82,8 +82,8 @@ return new class extends Migration
 
                 // Soft delete & Tracking
                 $table->boolean('is_deleted')->default(false);
-                $table->foreignId('bidang_id')->nullable()->constrained('bidangs')->nullOnDelete();
-                $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->unsignedBigInteger('bidang_id')->nullable();
+                $table->unsignedBigInteger('user_id')->nullable();
                 $table->timestamps();
                 $table->softDeletes();
 

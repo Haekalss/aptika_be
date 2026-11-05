@@ -83,8 +83,10 @@
         "sort-packages": true,
         "platform-check": false,
         "http2": false,
-        "audit": {
-            "block-insecure": false
+        "policy": {
+            "advisories": {
+                "block": false
+            }
         },
         "allow-plugins": {
             "pestphp/pest-plugin": true,

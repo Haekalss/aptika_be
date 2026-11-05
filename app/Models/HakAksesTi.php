@@ -31,6 +31,12 @@ class HakAksesTi extends Model
         'modul_fitur',
         'persetujuan_ketentuan',
         'status_permohonan',
+        'atasan_nama',
+        'atasan_nip',
+        'penanggung_jawab_nama',
+        'penanggung_jawab_nip',
+        'agen_nama',
+        'agen_nip',
         'bidang_id',
         'user_id',
     ];

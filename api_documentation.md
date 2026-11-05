@@ -414,8 +414,48 @@ Standar formulir FR-039/KOM.03.05/SANDIKAMI (Rev 0.0, berlaku 2022) untuk melapo
 - `DELETE /api/smki/evaluasi-drp/{id}` : Menghapus laporan (soft-delete, rincian ikut terhapus).
 - `GET /api/smki/evaluasi-drp/{id}/export-docx` : Unduh formulir FR-039 (.docx, A4 potret) hasil pengisian template asli `resources/templates/FR-039 Formulir Evaluasi Pengujian DRP.docx`. Bagian Check List BCP dicetak sama seperti template asli.
 
+## 14. SMKI - Daftar Aset Virtual (FR-035)
+
+Prefix: `/api/smki/daftar-aset-virtual` (memerlukan autentikasi Sanctum, pengguna aktif, dan layanan SMKI aktif).
+
+### Endpoints
+- `GET /api/smki/daftar-aset-virtual` : Daftar formulir yang dapat diakses pengguna, dengan paginasi. Filter opsional: `search`, `status` (`Draf` atau `Tersimpan`), `page`, dan `per_page` (1-100).
+- `POST /api/smki/daftar-aset-virtual` : Membuat formulir FR-035 beserta array `rows`.
+- `GET /api/smki/daftar-aset-virtual/{id}` : Mengambil detail formulir dan seluruh instance virtualisasinya.
+- `PUT /api/smki/daftar-aset-virtual/{id}` atau `PATCH /api/smki/daftar-aset-virtual/{id}` : Memperbarui formulir. Jika `rows` tidak dikirim, daftar instance tidak berubah; kirim `rows: []` secara eksplisit untuk mengosongkannya pada formulir Draf.
+- `DELETE /api/smki/daftar-aset-virtual/{id}` : Menghapus formulir secara soft-delete.
+
+Contoh body untuk membuat atau memperbarui formulir:
+```json
+{
+  "status": "Tersimpan",
+  "no_dokumen": "FR-035/KOM.03.05/SANDIKAMI",
+  "no_revisi": "0.0",
+  "tanggal_berlaku": "2022",
+  "kode_aset": "001/TI/APTIKA",
+  "nama_aset": "Server Virtualisasi",
+  "lokasi_aset": "Data Center",
+  "rows": [
+    {
+      "kode_aset": "",
+      "nama_instance": "VM Aplikasi",
+      "deskripsi": "Instance aplikasi internal",
+      "tipe_virtualisasi": "Proxmox",
+      "alamat": "192.0.2.10",
+      "hostname": "vm-app.internal",
+      "spesifikasi": "2 vCPU, RAM 4 GB",
+      "pemilik": "Bidang A",
+      "klasifikasi": "Internal"
+    }
+  ]
+}
+```
+
+Status `Draf` boleh berisi data parsial, tetapi tidak boleh kosong seluruhnya. Status `Tersimpan` mewajibkan metadata formulir, data server fisik, minimal satu instance, serta nama dan klasifikasi setiap instance. Kode aset instance boleh dikosongkan jika kode aset dasar dapat digunakan untuk membuat urutan otomatis. Klasifikasi yang diterima: `Rahasia`, `Internal`, atau `Publik`.
+
+Akses data mengikuti kepemilikan dan bidang: pengguna biasa hanya dapat mengakses formulirnya sendiri; admin bidang dapat mengakses formulir dalam bidangnya; Admin Aptika dapat mengakses seluruh bidang. Detail mengembalikan `rows` dan `permissions.can_update`/`permissions.can_delete`; daftar mengembalikan `instances_count` dan metadata paginasi Laravel.
+
 ---
 
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
-

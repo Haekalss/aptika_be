@@ -356,10 +356,26 @@
     <!-- TANDA TANGAN -->
     <div class="signature-section">
         <div class="signature-right">
-            <div>Bandung, {{ $formatTgl }}</div>
+            @php
+                $bln = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                try {
+                    $ttdDate = $screening->tanggal_ttd ? \Carbon\Carbon::parse($screening->tanggal_ttd) : null;
+                } catch (\Throwable $e) {
+                    $ttdDate = null;
+                }
+                $ttdTgl = $ttdDate ? ($ttdDate->format('d') . ' ' . $bln[(int)$ttdDate->format('m')] . ' ' . $ttdDate->format('Y')) : $formatTgl;
+            @endphp
+            <div>{{ $screening->ditandatangani_di ?: 'Bandung' }}, {{ $ttdTgl }}</div>
             <div style="font-weight: bold; margin-top: 3px;">Petugas Verifikator Screening</div>
-            <div class="signature-space"></div>
-            <div style="font-weight: bold;">( .................................................. )</div>
+            @if(!empty($tteDataUri ?? null))
+                <div><img src="{{ $tteDataUri }}" alt="Spesimen TTE" style="width: 260px; height: auto;" /></div>
+            @else
+                <div class="signature-space"></div>
+                <div style="font-weight: bold;">( {{ $screening->nama_verifikator ?: '..................................................' }} )</div>
+                @if(!empty($screening->nip_verifikator))
+                    <div style="font-size: 8pt; margin-top: 2px;">NIP. {{ $screening->nip_verifikator }}</div>
+                @endif
+            @endif
             <div style="font-size: 8pt; margin-top: 2px;">Pemerintah Provinsi Jawa Barat</div>
         </div>
         <div style="clear: both;"></div>

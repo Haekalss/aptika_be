@@ -295,7 +295,7 @@ class SmkiLaporanAuditDocxService
 
         if ($path !== null) {
             $imgP = $this->createImageParagraph($dom, 'center');
-            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgP, $path, 200)) {
+            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgP, $path, 340)) {
                 $cell->appendChild($imgP);
             } else {
                 $nameP = $this->createParagraph($dom, "\n\n\n\n\n(" . $signerName . ")", 'center');

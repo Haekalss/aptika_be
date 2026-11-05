@@ -138,6 +138,11 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class, 'created_by_user_id');
     }
 
+    public function spesimenTte()
+    {
+        return $this->hasOne(\App\Models\SmkiSpesimenTte::class, 'user_id');
+    }
+
     /**
      * Relasi ke tabel bidangs (unit kerja pengguna).
      */
