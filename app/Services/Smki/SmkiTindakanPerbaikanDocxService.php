@@ -341,7 +341,7 @@ class SmkiTindakanPerbaikanDocxService
             $pPr->appendChild($jc);
             $targetP->appendChild($pPr);
 
-            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $targetP, $path, 180)) {
+            if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $targetP, $path, 250)) {
                 if ($paras->length > 3) {
                     $this->writeParagraph($dom, $xpath, $paras->item(3), '');
                 }

@@ -32,18 +32,26 @@ class HakAksesTiDocxService
             throw new Exception('Gagal membuat file DOCX.');
         }
 
-        $zip->addFromString('[Content_Types].xml', $this->contentTypes());
+        $items = is_array($items) ? $items : $items->all();
+
+        // Spesimen TTE para penanda tangan (opsional, dilewati bila tidak ada).
+        $tteImages = $this->resolveAllTteImages($items);
+        foreach ($tteImages as $mediaName => $binary) {
+            $zip->addFromString('word/media/' . $mediaName, $binary);
+        }
+
+        $zip->addFromString('[Content_Types].xml', $this->contentTypes(!empty($tteImages)));
         $zip->addFromString('_rels/.rels', $this->rootRels());
-        $zip->addFromString('word/_rels/document.xml.rels', $this->documentRels());
+        $zip->addFromString('word/_rels/document.xml.rels', $this->documentRels(array_keys($tteImages)));
         $zip->addFromString('word/styles.xml', $this->styles());
-        $zip->addFromString('word/document.xml', $this->document($items, $options));
+        $zip->addFromString('word/document.xml', $this->document($items, $options, $tteImages));
 
         $zip->close();
 
         return $outputPath;
     }
 
-    private function document($items, array $options): string
+    private function document($items, array $options, array $tteImages = []): string
     {
         $noDokumen = $options['no_dokumen'] ?? 'FR-018/KOM.03.05/ SANDIKAMI';
         $noRevisi = $options['no_revisi'] ?? '1.1';
@@ -59,22 +67,20 @@ class HakAksesTiDocxService
         );
         $body .= $this->p('', []);
 
-        $items = is_array($items) ? $items : $items->all();
-
         if (empty($items)) {
             $body .= $this->p('Tidak ada data permohonan untuk diekspor.', ['italic' => true]);
             return $this->wrapDocument($body);
         }
 
-        foreach ($items as $item) {
-            $body .= $this->renderItem($item);
+        foreach ($items as $idx => $item) {
+            $body .= $this->renderItem($item, $tteImages, (int) $idx);
             $body .= $this->p('', []);
         }
 
         return $this->wrapDocument($body);
     }
 
-    private function renderItem($item): string
+    private function renderItem($item, array $tteImages = [], int $idx = 0): string
     {
         $get = function ($key, $default = '-') use ($item) {
             $val = is_array($item) ? ($item[$key] ?? null) : ($item->$key ?? null);
@@ -142,7 +148,7 @@ class HakAksesTiDocxService
 
         // Tanda tangan
         $out .= $this->p('', []);
-        $out .= $this->signatureTable();
+        $out .= $this->signatureTable($item, $tteImages, $idx);
 
         return $out;
     }
@@ -253,27 +259,112 @@ class HakAksesTiDocxService
         return $xml . $this->p('', []);
     }
 
-    private function signatureTable(): string
+    private function signatureTable($item = null, array $tteImages = [], int $idx = 0): string
     {
+        $get = function ($key) use ($item) {
+            if ($item === null) {
+                return '';
+            }
+            $val = is_array($item) ? ($item[$key] ?? null) : ($item->$key ?? null);
+            return ($val === null || $val === '') ? '' : (string) $val;
+        };
+
         $roles = [
-            'Dibuat Oleh:' . "\n" . 'Pemohon,',
-            'Diketahui Oleh:' . "\n" . 'Atasan Pemohon,',
-            'Disetujui Oleh:' . "\n" . 'Penanggung Jawab Perangkat,',
-            'Dilaksanakan Oleh:' . "\n" . 'Agen,',
+            ['label' => 'Dibuat Oleh:' . "\n" . 'Pemohon,', 'nama' => $get('nama_pemohon'), 'nip' => $get('nip_id_pegawai'), 'key' => 'pemohon'],
+            ['label' => 'Diketahui Oleh:' . "\n" . 'Atasan Pemohon,', 'nama' => $get('atasan_nama'), 'nip' => $get('atasan_nip'), 'key' => 'atasan'],
+            ['label' => 'Disetujui Oleh:' . "\n" . 'Penanggung Jawab Perangkat,', 'nama' => $get('penanggung_jawab_nama'), 'nip' => $get('penanggung_jawab_nip'), 'key' => 'pj'],
+            ['label' => 'Dilaksanakan Oleh:' . "\n" . 'Agen,', 'nama' => $get('agen_nama'), 'nip' => $get('agen_nip'), 'key' => 'agen'],
         ];
 
         $xml = '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr><w:tr>';
         foreach ($roles as $role) {
+            $mediaKey = 'tte_' . $idx . '_' . $role['key'] . '.png';
+            $hasImage = isset($tteImages[$mediaKey]);
+            // Pola FR-008: nama/NIP teks dilewati bila gambar TTE sudah tersisip.
+            $drawing = $hasImage
+                ? $this->tteDrawingXml($tteImages, $mediaKey)
+                : '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p>'
+                    . '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p>';
+            $namaLine = (!$hasImage)
+                ? '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">(' . $this->esc($role['nama'] !== '' ? $role['nama'] : '............................') . ')</w:t></w:r></w:p>'
+                : '';
+            $nipLine = (!$hasImage && $role['nip'] !== '')
+                ? '<w:p><w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">NIP. ' . $this->esc($role['nip']) . '</w:t></w:r></w:p>'
+                : '';
             $xml .= '<w:tc><w:tcPr><w:tcW w:w="2250" w:type="dxa"/></w:tcPr>' .
-                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">' . $this->esc($role) . '</w:t></w:r></w:p>' .
-                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p>' .
-                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p>' .
-                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r></w:p>' .
-                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">(............................)</w:t></w:r></w:p>' .
+                '<w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">' . $this->esc($role['label']) . '</w:t></w:r></w:p>' .
+                $drawing . $namaLine . $nipLine .
                 '</w:tc>';
         }
         $xml .= '</w:tr></w:tbl>';
         return $xml;
+    }
+
+    /**
+     * Resolve gambar spesimen TTE seluruh penanda tangan pada daftar item.
+     * @return array<string,string> mediaName => binary PNG
+     */
+    private function resolveAllTteImages($items): array
+    {
+        $out = [];
+        foreach ($items as $idx => $item) {
+            $get = function ($key) use ($item) {
+                $val = is_array($item) ? ($item[$key] ?? null) : ($item->$key ?? null);
+                return ($val === null || $val === '') ? '' : (string) $val;
+            };
+            $pairs = [
+                'pemohon' => [$get('nip_id_pegawai'), $get('nama_pemohon')],
+                'atasan' => [$get('atasan_nip'), $get('atasan_nama')],
+                'pj' => [$get('penanggung_jawab_nip'), $get('penanggung_jawab_nama')],
+                'agen' => [$get('agen_nip'), $get('agen_nama')],
+            ];
+            foreach ($pairs as $key => [$nip, $nama]) {
+                if ($nip === '' && $nama === '') {
+                    continue;
+                }
+                try {
+                    $path = app(\App\Services\TteResolverService::class)->imagePath($nip, $nama);
+                } catch (\Throwable $e) {
+                    $path = null;
+                }
+                if ($path && is_file($path)) {
+                    $binary = @file_get_contents($path);
+                    if ($binary !== false && $binary !== '') {
+                        $out['tte_' . (int) $idx . '_' . $key . '.png'] = $binary;
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Paragraf gambar TTE (inline, rata tengah) untuk sel tanda tangan.
+     */
+    private function tteDrawingXml(array $tteImages, string $mediaName): string
+    {
+        $uid = 1000 + abs(crc32($mediaName)) % 8000;
+        $relId = 'rIdTte_' . preg_replace('/[^a-z0-9_]/i', '_', pathinfo($mediaName, PATHINFO_FILENAME));
+        $size = @getimagesizefromstring($tteImages[$mediaName]);
+        $wPx = 140;
+        $hPx = ($size && $size[0] > 0) ? (int) round($wPx * $size[1] / $size[0]) : 55;
+        $cx = $wPx * 9525;
+        $cy = max(1, $hPx) * 9525;
+
+        return '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="60"/></w:pPr><w:r><w:drawing>'
+            . '<wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
+            . '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+            . '<wp:docPr id="' . $uid . '" name="' . htmlspecialchars($mediaName, ENT_XML1, 'UTF-8') . '"/>'
+            . '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'
+            . '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            . '<pic:pic><pic:nvPicPr><pic:cNvPr id="' . ($uid + 5000) . '" name="tte.png"/><pic:cNvPicPr/></pic:nvPicPr>'
+            . '<pic:blipFill><a:blip r:embed="' . $relId . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm>'
+            . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+            . '</pic:pic></a:graphicData></a:graphic>'
+            . '</wp:inline></w:drawing></w:r></w:p>';
     }
 
     private function esc(string $text): string
@@ -285,12 +376,13 @@ class HakAksesTiDocxService
     // PACKAGE PARTS
     // ============================================================
 
-    private function contentTypes(): string
+    private function contentTypes(bool $withPng = false): string
     {
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' .
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' .
             '<Default Extension="xml" ContentType="application/xml"/>' .
+            ($withPng ? '<Default Extension="png" ContentType="image/png"/>' : '') .
             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' .
             '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' .
             '</Types>';
@@ -304,11 +396,16 @@ class HakAksesTiDocxService
             '</Relationships>';
     }
 
-    private function documentRels(): string
+    private function documentRels(array $tteMedia = []): string
     {
+        $rels = '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
+        foreach ($tteMedia as $mediaName) {
+            $relId = 'rIdTte_' . preg_replace('/[^a-z0-9_]/i', '_', pathinfo($mediaName, PATHINFO_FILENAME));
+            $rels .= '<Relationship Id="' . $relId . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' . htmlspecialchars($mediaName, ENT_XML1, 'UTF-8') . '"/>';
+        }
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' .
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' .
+            $rels .
             '</Relationships>';
     }
 

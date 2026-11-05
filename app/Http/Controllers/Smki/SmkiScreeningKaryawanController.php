@@ -185,6 +185,10 @@ class SmkiScreeningKaryawanController extends Controller
             'tanggal_screening'  => 'required|date',
             'kesimpulan'         => 'required|in:Perlu melengkapi administrasi,Administrasi Lengkap',
             'catatan'            => 'nullable|string',
+            'nama_verifikator'   => 'nullable|string|max:255',
+            'nip_verifikator'    => 'nullable|string|max:50',
+            'ditandatangani_di'  => 'nullable|string|max:255',
+            'tanggal_ttd'        => 'nullable|date',
             'details'            => 'required|array|min:5',
             'details.*.id_item'  => 'required|exists:item_screening,id_item',
             'details.*.status'   => 'required|in:Ada,Tidak',
@@ -218,6 +222,10 @@ class SmkiScreeningKaryawanController extends Controller
                 'tanggal_screening' => $request->input('tanggal_screening'),
                 'kesimpulan'        => $request->input('kesimpulan'),
                 'catatan'           => $request->input('catatan'),
+                'nama_verifikator'  => $request->input('nama_verifikator'),
+                'nip_verifikator'   => $request->input('nip_verifikator'),
+                'ditandatangani_di' => $request->input('ditandatangani_di'),
+                'tanggal_ttd'       => $request->input('tanggal_ttd'),
             ]);
 
             $firstDetailId = null;
@@ -281,6 +289,10 @@ class SmkiScreeningKaryawanController extends Controller
             'tanggal_screening'  => 'required|date',
             'kesimpulan'         => 'required|in:Perlu melengkapi administrasi,Administrasi Lengkap',
             'catatan'            => 'nullable|string',
+            'nama_verifikator'   => 'nullable|string|max:255',
+            'nip_verifikator'    => 'nullable|string|max:50',
+            'ditandatangani_di'  => 'nullable|string|max:255',
+            'tanggal_ttd'        => 'nullable|date',
             'details'            => 'nullable|array',
             'details.*.id_item'  => 'required_with:details|exists:item_screening,id_item',
             'details.*.status'   => 'required_with:details|in:Ada,Tidak',
@@ -313,6 +325,10 @@ class SmkiScreeningKaryawanController extends Controller
                 'tanggal_screening' => $request->input('tanggal_screening'),
                 'kesimpulan'        => $request->input('kesimpulan'),
                 'catatan'           => $request->input('catatan'),
+                'nama_verifikator'  => $request->input('nama_verifikator'),
+                'nip_verifikator'   => $request->input('nip_verifikator'),
+                'ditandatangani_di' => $request->input('ditandatangani_di'),
+                'tanggal_ttd'       => $request->input('tanggal_ttd'),
             ]);
 
             if ($request->has('details')) {
@@ -392,6 +408,24 @@ class SmkiScreeningKaryawanController extends Controller
             'details.item',
         ])->findOrFail($id);
 
-        return view('print.berita_acara_screening', compact('screening'));
+        // Spesimen TTE verifikator sebagai data-URI agar bisa dicetak langsung.
+        $tteDataUri = null;
+        try {
+            $path = app(\App\Services\TteResolverService::class)->imagePath(
+                (string) ($screening->nip_verifikator ?? ''),
+                (string) ($screening->nama_verifikator ?? '')
+            );
+            if ($path && is_file($path)) {
+                $binary = @file_get_contents($path);
+                if ($binary !== false && $binary !== '') {
+                    $mime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($binary) ?: 'image/png';
+                    $tteDataUri = 'data:' . $mime . ';base64,' . base64_encode($binary);
+                }
+            }
+        } catch (\Throwable $e) {
+            $tteDataUri = null;
+        }
+
+        return view('print.berita_acara_screening', compact('screening', 'tteDataUri'));
     }
 }

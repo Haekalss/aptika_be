@@ -168,6 +168,12 @@ class HakAksesTiController extends Controller
             'persetujuan_ketentuan' => 'nullable|boolean',
             'status_permohonan'     => 'nullable|string',
             'jenis_akses'           => 'nullable|array',
+            'atasan_nama'           => 'nullable|string|max:255',
+            'atasan_nip'            => 'nullable|string|max:50',
+            'penanggung_jawab_nama' => 'nullable|string|max:255',
+            'penanggung_jawab_nip'  => 'nullable|string|max:50',
+            'agen_nama'             => 'nullable|string|max:255',
+            'agen_nip'              => 'nullable|string|max:50',
         ]);
 
         $jenisAksesIds = $validated['jenis_akses'] ?? [];
@@ -225,6 +231,12 @@ class HakAksesTiController extends Controller
             'persetujuan_ketentuan' => 'nullable|boolean',
             'status_permohonan'     => 'nullable|string',
             'jenis_akses'           => 'nullable|array',
+            'atasan_nama'           => 'nullable|string|max:255',
+            'atasan_nip'            => 'nullable|string|max:50',
+            'penanggung_jawab_nama' => 'nullable|string|max:255',
+            'penanggung_jawab_nip'  => 'nullable|string|max:50',
+            'agen_nama'             => 'nullable|string|max:255',
+            'agen_nip'              => 'nullable|string|max:50',
         ]);
 
         $hasJenis = array_key_exists('jenis_akses', $validated);

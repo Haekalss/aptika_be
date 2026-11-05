@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SmkiEvaluasiKepatuhan;
+use App\Services\Concerns\InsertsTteImage;
 use DOMDocument;
 use DOMXPath;
 use Exception;
@@ -10,6 +11,8 @@ use ZipArchive;
 
 class SmkiEvaluasiKepatuhanDocxService
 {
+    use InsertsTteImage;
+
     private const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
     private const MONTHS = [
@@ -169,10 +172,64 @@ class SmkiEvaluasiKepatuhanDocxService
         $this->fillSignatureLine($dom, $xpath, 'Ditandatangani di', (string) ($evaluasi->ditandatangani_di ?? ''));
         $this->fillSignatureLine($dom, $xpath, 'Tanggal', $this->formatTanggalIndo($evaluasi->tanggal_ttd));
 
+        // Nama penanda tangan + NIP + gambar spesimen TTE.
+        // Gambar disisipkan SEBELUM nama "(…)" ditimpa agar XPath penanda cocok.
+        $nama = trim((string) ($evaluasi->nama_penandatangan ?? ''));
+        $nip = trim((string) ($evaluasi->nip_penandatangan ?? ''));
+        if ($nama !== '' || $nip !== '') {
+            $ttePath = $this->resolveTtePath($nip, $nama);
+            foreach ($xpath->query('//w:p') as $p) {
+                $text = trim(preg_replace('/\s+/u', ' ', $p->textContent));
+                if (!preg_match('/^\(\s*[….\.]+\s*\)$/u', $text)) {
+                    continue;
+                }
+                // Pola FR-008: bila gambar berhasil disisipkan, paragraf "(…)"
+                // dihapus dan nama/NIP tidak ditulis ulang (sudah di dalam gambar).
+                if ($ttePath !== null) {
+                    $imgPara = $this->tteImageParagraph($dom, 'center');
+                    if ($this->insertTteImage($zip, $dom, $xpath, $imgPara, $ttePath, 320)) {
+                        $p->parentNode->insertBefore($imgPara, $p);
+                        $p->parentNode->removeChild($p);
+                        break;
+                    }
+                }
+                $this->setNameParagraph($dom, $xpath, $p, ' (' . ($nama !== '' ? $nama : '…') . ')');
+                if ($nip !== '') {
+                    $nipPara = $p->cloneNode(true);
+                    $this->setNameParagraph($dom, $xpath, $nipPara, 'NIP. ' . $nip);
+                    $p->parentNode->insertBefore($nipPara, $p->nextSibling);
+                }
+                break;
+            }
+        }
+
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
 
         return $outputPath;
+    }
+
+    /**
+     * Isi paragraf nama "(…)" dengan teks baru (format mengikuti run pertama).
+     */
+    private function setNameParagraph(DOMDocument $dom, DOMXPath $xpath, $p, string $text): void
+    {
+        $runs = $xpath->query('w:r', $p);
+        $firstRPr = $runs->length > 0 ? $xpath->query('w:rPr', $runs->item(0))->item(0) : null;
+        foreach (iterator_to_array($p->childNodes) as $child) {
+            if (in_array($child->nodeName, ['w:r', 'w:proofErr', 'w:bookmarkStart', 'w:bookmarkEnd'], true)) {
+                $p->removeChild($child);
+            }
+        }
+        $r = $dom->createElementNS(self::W, 'w:r');
+        if ($firstRPr) {
+            $r->appendChild($firstRPr);
+        }
+        $t = $dom->createElementNS(self::W, 'w:t');
+        $t->appendChild($dom->createTextNode($text));
+        $t->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+        $r->appendChild($t);
+        $p->appendChild($r);
     }
 
     private function xpath(DOMDocument $dom): DOMXPath
