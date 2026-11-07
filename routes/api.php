@@ -1526,6 +1526,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'store'])
                 ->name('smki.penyedia.store');
 
+            Route::get('backup-restore/lookup', [\App\Http\Controllers\Smki\SmkiBackupRestoreController::class, 'lookup']);
+            Route::get('backup-restore/{report}/signatories/{role}/specimen', [\App\Http\Controllers\Smki\SmkiBackupRestoreExportController::class, 'specimen'])->whereNumber('report')->whereIn('role', ['pelaksana', 'penanggung-jawab']);
+            Route::get('backup-restore/{report}/export-docx', [\App\Http\Controllers\Smki\SmkiBackupRestoreExportController::class, 'docx'])->whereNumber('report');
+            Route::post('backup-restore/{report}/entries/{entry}/attachments', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'store'])->whereNumber(['report', 'entry']);
+            Route::get('backup-restore/{report}/attachments/{attachment}', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'show'])->whereNumber(['report', 'attachment']);
+            Route::delete('backup-restore/{report}/attachments/{attachment}', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'destroy'])->whereNumber(['report', 'attachment']);
+            Route::apiResource('backup-restore', \App\Http\Controllers\Smki\SmkiBackupRestoreController::class)
+                ->parameters(['backup-restore' => 'report'])->whereNumber('report');
+
             Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
             Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
             Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
