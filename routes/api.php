@@ -1704,6 +1704,24 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.hak-akses-fisik.destroy',
                 ]);
 
+            // Risk Register (FR-002)
+            Route::get('risk-register/lookup', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'lookup'])
+                ->name('smki.risk-register.lookup');
+            Route::get('risk-register/export-excel', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'exportExcel'])
+                ->name('smki.risk-register.export-excel');
+            Route::get('risk-register/export-pdf', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'exportPdf'])
+                ->name('smki.risk-register.export-pdf');
+            Route::post('risk-register/update-header', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'updateHeader'])
+                ->name('smki.risk-register.update-header');
+            Route::apiResource('risk-register', \App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class)
+                ->names([
+                    'index'   => 'smki.risk-register.index',
+                    'store'   => 'smki.risk-register.store',
+                    'show'    => 'smki.risk-register.show',
+                    'update'  => 'smki.risk-register.update',
+                    'destroy' => 'smki.risk-register.destroy',
+                ]);
+
             // Formulir Hak Akses TI (FR-018)
             Route::get('hak-akses-ti/lookup', [\App\Http\Controllers\Smki\HakAksesTiController::class, 'lookup'])
                 ->name('smki.hak-akses-ti.lookup');

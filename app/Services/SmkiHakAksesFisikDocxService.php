@@ -230,24 +230,32 @@ class SmkiHakAksesFisikDocxService
                 }
             }
             elseif ($text === 'Atasan Pemohon,') {
+                $namaAtasan = $form->atasan_nama;
+                $tteOk = isset($pMap[$idx + 3])
+                    ? $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->atasan_nip, $namaAtasan, 'Atasan Langsung Pemohon')
+                    : false;
                 if (isset($pMap[$idx + 7])) {
-                    $namaAtasan = $form->atasan_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAtasan ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->atasan_nip, $namaAtasan, 'Atasan Langsung Pemohon');
+                    // Bila spesimen tersisip, baris nama dikosongkan (hanya spesimen).
+                    // Bila tanpa spesimen, nama tetap ditampilkan.
+                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], $tteOk ? '' : "( " . ($namaAtasan ?: '……………………………') . " )", 'center');
                 }
             }
             elseif ($text === 'Penanggung Jawab Perangkat,') {
+                $namaPJ = $form->penanggung_jawab_nama;
+                $tteOk = isset($pMap[$idx + 3])
+                    ? $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->penanggung_jawab_nip, $namaPJ, 'Penanggung Jawab Perangkat')
+                    : false;
                 if (isset($pMap[$idx + 7])) {
-                    $namaPJ = $form->penanggung_jawab_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaPJ ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->penanggung_jawab_nip, $namaPJ, 'Penanggung Jawab Perangkat');
+                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], $tteOk ? '' : "( " . ($namaPJ ?: '……………………………') . " )", 'center');
                 }
             }
             elseif ($text === 'Agen,') {
+                $namaAgen = $form->agen_nama;
+                $tteOk = isset($pMap[$idx + 3])
+                    ? $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->agen_nip, $namaAgen, 'Agen Pelaksana')
+                    : false;
                 if (isset($pMap[$idx + 7])) {
-                    $namaAgen = $form->agen_nama;
-                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], "( " . ($namaAgen ?: '……………………………') . " )", 'center');
-                    $this->tryInsertTte($zip, $dom, $xp, $pMap[$idx + 3]['node'], $form->agen_nip, $namaAgen, 'Agen Pelaksana');
+                    $this->setParagraphText($dom, $xp, $pMap[$idx + 7]['node'], $tteOk ? '' : "( " . ($namaAgen ?: '……………………………') . " )", 'center');
                 }
             }
         }
@@ -260,14 +268,17 @@ class SmkiHakAksesFisikDocxService
 
     /**
      * Sisipkan gambar spesimen TTE dinamis resmi sesuai NIP dan Nama pejabat/pemohon.
+     *
+     * @return bool true bila gambar berhasil disisipkan (dipakai untuk
+     * mengosongkan baris nama di luar spesimen), false bila tidak.
      */
-    private function tryInsertTte(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, $paragraphNode, ?string $nip, ?string $nama, ?string $fallbackJabatan = null): void
+    private function tryInsertTte(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, $paragraphNode, ?string $nip, ?string $nama, ?string $fallbackJabatan = null): bool
     {
         $nip = trim((string) $nip);
         $nama = trim((string) $nama);
 
         if ($nip === '' && $nama === '') {
-            return;
+            return false;
         }
 
         try {
@@ -277,7 +288,7 @@ class SmkiHakAksesFisikDocxService
             // 1. Cek apakah ada di master pegawai
             $pegawai = $resolver->find($nip, $nama);
             if ($pegawai !== null) {
-                $imgPath = $renderer->generate($pegawai, null);
+                $imgPath = $renderer->generate($pegawai, null, false);
             } else {
                 // 2. Jika bukan pegawai (misal vendor luar / user baru), buat spesimen dinamis dengan data namanya
                 $cleanNama = trim(preg_replace('/\s*\([^)]*\)\s*/', ' ', $nama));
@@ -287,25 +298,30 @@ class SmkiHakAksesFisikDocxService
                     'jabatan' => $fallbackJabatan ?: 'Pemohon / Pelaksana Akses',
                     'pangkat' => '',
                 ];
-                $imgPath = $renderer->generate($payload, null);
+                $imgPath = $renderer->generate($payload, null, false);
             }
 
             if ($imgPath && file_exists($imgPath)) {
-                // Pastikan paragraf gambar rata tengah
-                $pPr = $paragraphNode->getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'pPr')->item(0);
-                if (!$pPr) {
-                    $pPr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:pPr');
-                    $paragraphNode->insertBefore($pPr, $paragraphNode->firstChild);
+                // FR-019: kosongkan slot tanda tangan lebih dulu sehingga
+                // di dalam kotak hanya ada gambar spesimen saja.
+                while ($paragraphNode->hasChildNodes()) {
+                    $paragraphNode->removeChild($paragraphNode->firstChild);
                 }
+
+                // Paragraf gambar rata tengah (pPr baru, karena yang lama ikut dibuang).
+                $pPr = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:pPr');
+                $paragraphNode->appendChild($pPr);
                 $jc = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:jc');
                 $jc->setAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:val', 'center');
                 $pPr->appendChild($jc);
 
                 // Sisipkan gambar spesimen
-                $this->insertImageIntoParagraph($zip, $dom, $xp, $paragraphNode, $imgPath, 140);
+                return $this->insertImageIntoParagraph($zip, $dom, $xp, $paragraphNode, $imgPath, 160);
             }
         } catch (\Throwable $e) {
             // Ignore error agar proses docx tetap berjalan lancar
         }
+
+        return false;
     }
 }

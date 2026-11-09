@@ -33,7 +33,7 @@ class TteSpecimenController extends Controller
 
     /**
      * Gambar TTE untuk satu pegawai.
-     * GET /api/tte/spesimen/{pegawai}?unit=DINAS%20KOMUNIKASI...
+     * GET /api/tte/spesimen/{pegawai}?unit=...&without_qr=1
      */
     public function show(Request $request, $pegawai)
     {
@@ -47,7 +47,8 @@ class TteSpecimenController extends Controller
         }
 
         $unit = $request->query('unit');
-        $path = $this->tte->generate($model, $unit ? (string) $unit : null);
+        $withQr = !$request->boolean('without_qr');
+        $path = $this->tte->generate($model, $unit ? (string) $unit : null, $withQr);
 
         if ($path === null) {
             return response()->json([
