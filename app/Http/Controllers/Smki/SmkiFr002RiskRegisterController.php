@@ -167,7 +167,7 @@ class SmkiFr002RiskRegisterController extends Controller
                 'nama_aset_proses' => $validated['nama_aset_proses'],
                 'kerawanan_vulnerability' => $validated['kerawanan_vulnerability'] ?? null,
                 'ancaman_threat' => $validated['ancaman_threat'] ?? null,
-                'kategori_cia' => $validated['kategori_cia'] ?? 'C,I,A',
+                'kategori_cia' => array_key_exists('kategori_cia', $validated) ? (string) $validated['kategori_cia'] : 'C,I,A',
                 'uraian_dampak' => $validated['uraian_dampak'] ?? null,
 
                 'inherent_likelihood' => $inh['likelihood'],
@@ -291,7 +291,7 @@ class SmkiFr002RiskRegisterController extends Controller
                 'nama_aset_proses' => $validated['nama_aset_proses'],
                 'kerawanan_vulnerability' => $validated['kerawanan_vulnerability'] ?? null,
                 'ancaman_threat' => $validated['ancaman_threat'] ?? null,
-                'kategori_cia' => $validated['kategori_cia'] ?? $risiko->kategori_cia,
+                'kategori_cia' => array_key_exists('kategori_cia', $validated) ? (string) $validated['kategori_cia'] : $risiko->kategori_cia,
                 'uraian_dampak' => $validated['uraian_dampak'] ?? null,
 
                 'inherent_likelihood' => $inh['likelihood'],
@@ -537,6 +537,19 @@ class SmkiFr002RiskRegisterController extends Controller
             $sheet->getStyle($cell)->getFont()->setBold(true);
             $sheet->getStyle($cell)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
         };
+
+        // The workbook legend must use the same scoring as the register and the app.
+        $matrix = $spreadsheet->getSheetByName('Risk Matrix');
+        if ($matrix !== null) {
+            for ($likelihood = 1; $likelihood <= 5; $likelihood++) {
+                for ($impact = 1; $impact <= 5; $impact++) {
+                    $risk = SmkiFr002Risiko::kalkulasiMatriks($likelihood, $impact);
+                    $cell = Coordinate::stringFromColumnIndex($impact + 2).($likelihood + 4);
+                    $matrix->setCellValue($cell, $risk['kategori']);
+                    $applyStatusStyling($matrix, $cell, $risk['score']);
+                }
+            }
+        }
 
         $applyMonitoringStyling = function ($sheet, $cell, $status) {
             if ($status === 'Closed') {

@@ -66,8 +66,9 @@ class Fr002RiskRegisterTest extends TestCase
 
         $this->login('IKP');
         $this->getJson($url)->assertOk()->assertJsonPath('data.nama_aset_proses', 'Aset uji');
-        $this->putJson($url, ['nama_aset_proses' => 'Perubahan terbaru', 'kode_annex' => null, 'lock_version' => 1] + $this->risk())
-            ->assertOk()->assertJsonPath('data.lock_version', 2)->assertJsonPath('data.kode_annex', null);
+        $this->putJson($url, ['nama_aset_proses' => 'Perubahan terbaru', 'kode_annex' => null, 'kategori_cia' => '', 'lock_version' => 1] + $this->risk())
+            ->assertOk()->assertJsonPath('data.lock_version', 2)->assertJsonPath('data.kode_annex', null)
+            ->assertJsonPath('data.kategori_cia', '');
         $this->putJson($url, ['lock_version' => 1] + $this->risk())->assertConflict();
         $this->deleteJson($url, ['lock_version' => 1])->assertConflict();
         $this->getJson($url)->assertJsonPath('data.nama_aset_proses', 'Perubahan terbaru');
@@ -105,6 +106,9 @@ class Fr002RiskRegisterTest extends TestCase
             $this->assertSame(DataType::TYPE_STRING, $sheet->getCell('B11')->getDataType());
             $this->assertSame(DataType::TYPE_FORMULA, $sheet->getCell('I11')->getDataType());
             $this->assertCount(0, $sheet->getDrawingCollection(), 'A mismatched name and NIP must not produce a specimen.');
+            $matrix = $book->getSheetByName('Risk Matrix');
+            $this->assertSame('Rendah', $matrix->getCell('F5')->getValue());
+            $this->assertSame('Ekstrim', $matrix->getCell('G9')->getValue());
             $book->disconnectWorksheets();
         } finally {
             unlink($path);
