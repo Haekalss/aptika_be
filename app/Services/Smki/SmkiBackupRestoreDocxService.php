@@ -61,6 +61,11 @@ class SmkiBackupRestoreDocxService
                 throw new RuntimeException('Struktur template FR-030 berubah.');
             }
             $matrix = $tables->item(0);
+            foreach (iterator_to_array($xp->query('/w:document/w:body/w:p[following-sibling::w:tbl[1] = /w:document/w:body/w:tbl[1]]')) as $leading) {
+                if (trim($leading->textContent) === '' && ! $xp->query('.//w:drawing', $leading)->length) {
+                    $leading->parentNode->removeChild($leading);
+                }
+            }
             $yearCell = $xp->query('w:tr[1]/w:tc[last()]', $matrix)->item(0);
             $this->setCellText($dom, $xp, $yearCell, 'Tahun: '.$report->tahun.($report->status === 'draft' ? ' - DRAF' : ''), 'center');
             foreach ($xp->query('w:tr[position() <= 2]', $matrix) as $heading) {
@@ -90,6 +95,8 @@ class SmkiBackupRestoreDocxService
                 }
             }
             $legend = $this->paragraph($dom, 'B = Backup; R = Restore; - = Belum dicatat. Rincian dan bukti kegiatan tercantum pada lampiran.');
+            $this->compactBlock($dom, $xp, $matrix);
+            $this->compactBlock($dom, $xp, $legend);
             $matrix->parentNode->insertBefore($legend, $matrix->nextSibling);
             $spacer = $legend->nextSibling;
             while ($spacer && $spacer !== $tables->item(1)) {
@@ -113,7 +120,7 @@ class SmkiBackupRestoreDocxService
                     $keepNext = $dom->createElementNS(self::W_NS, 'w:keepNext');
                     $properties->insertBefore($keepNext, $properties->firstChild);
                 }
-                $keepNext->setAttributeNS(self::W_NS, 'w:val', '0');
+                $keepNext->setAttributeNS(self::W_NS, 'w:val', $xp->query('w:outlineLvl', $properties)->length ? '1' : '0');
             }
             foreach ($xp->query('/w:document/w:body/w:tbl[2]/w:tr[1]//w:keepNext') as $keepNext) {
                 $keepNext->setAttributeNS(self::W_NS, 'w:val', '1');
@@ -191,13 +198,55 @@ class SmkiBackupRestoreDocxService
         return $p;
     }
 
+    private function compactBlock(DOMDocument $dom, DOMXPath $xp, DOMNode $block): void
+    {
+        $paragraphs = $block->localName === 'p' ? [$block] : $xp->query('.//w:p', $block);
+        foreach ($paragraphs as $paragraph) {
+            $pr = $xp->query('w:pPr', $paragraph)->item(0);
+            if (! $pr) {
+                $pr = $dom->createElementNS(self::W_NS, 'w:pPr');
+                $paragraph->insertBefore($pr, $paragraph->firstChild);
+            }
+            foreach (iterator_to_array($xp->query('w:spacing', $pr)) as $old) {
+                $pr->removeChild($old);
+            }
+            $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+            foreach (['before' => '0', 'after' => '0', 'line' => '220', 'lineRule' => 'auto'] as $key => $value) {
+                $spacing->setAttributeNS(self::W_NS, 'w:'.$key, $value);
+            }
+            $pr->appendChild($spacing);
+        }
+        foreach ($xp->query('.//w:r', $block) as $run) {
+            // Do not shrink drawings: specimen sizing is controlled proportionally at embedding.
+            if ($xp->query('w:drawing', $run)->length) {
+                continue;
+            }
+            $pr = $xp->query('w:rPr', $run)->item(0);
+            if (! $pr) {
+                $pr = $dom->createElementNS(self::W_NS, 'w:rPr');
+                $run->insertBefore($pr, $run->firstChild);
+            }
+            foreach (['sz', 'szCs'] as $name) {
+                foreach (iterator_to_array($xp->query('w:'.$name, $pr)) as $old) {
+                    $pr->removeChild($old);
+                }
+                $size = $dom->createElementNS(self::W_NS, 'w:'.$name);
+                $size->setAttributeNS(self::W_NS, 'w:val', '18');
+                $pr->appendChild($size);
+            }
+        }
+    }
+
     private function signatories(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, DOMNode $table, SmkiBackupRestoreReport $report): void
     {
-        foreach (['w:tblPr/w:tblW' => '9600', 'w:tblPr/w:tblInd' => '8423'] as $query => $width) {
+        $page = $xp->query('//w:sectPr/w:pgSz')->item(0);
+        $margin = $xp->query('//w:sectPr/w:pgMar')->item(0);
+        $available = (int) $page->getAttributeNS(self::W_NS, 'w') - (int) $margin->getAttributeNS(self::W_NS, 'left') - (int) $margin->getAttributeNS(self::W_NS, 'right');
+        foreach (['w:tblPr/w:tblW' => (string) $available, 'w:tblPr/w:tblInd' => '0'] as $query => $width) {
             $xp->query($query, $table)->item(0)->setAttributeNS(self::W_NS, 'w:w', $width);
         }
         foreach ($xp->query('w:tblGrid/w:gridCol|w:tr/w:tc/w:tcPr/w:tcW', $table) as $node) {
-            $node->setAttributeNS(self::W_NS, 'w:w', '4800');
+            $node->setAttributeNS(self::W_NS, 'w:w', (string) intdiv($available, 2));
         }
         $row = $xp->query('w:tr[2]', $table)->item(0);
         foreach (iterator_to_array($xp->query('w:trPr/w:trHeight', $row)) as $height) {
@@ -214,11 +263,12 @@ class SmkiBackupRestoreDocxService
             $cell->appendChild($p);
             $path = $this->specimens->imagePath($report, $role);
             if ($path) {
-                $this->embedImage($zip, $dom, $p, $path, 280);
+                $this->embedImage($zip, $dom, $p, $path, 240);
             } else {
                 $p->appendChild($this->makeRun($dom, 'Belum dipilih'));
             }
         }
+        $this->compactBlock($dom, $xp, $table);
     }
 
     private function appendix(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, SmkiBackupRestoreReport $report): void
@@ -246,17 +296,29 @@ class SmkiBackupRestoreDocxService
             $spacer->parentNode->removeChild($spacer);
             $spacer = $next;
         }
-        foreach ($report->assets as $asset) {
-            foreach ($asset->entries as $entry) {
-                $caption = ($asset->nama_aset ?? '').' - Bulan '.$entry->month.' - '.ucfirst($entry->operation);
-                $details = $caption.': '.$this->summary($entry).' (hasil: '.($entry->result ?? '-').'; tanggal: '.($entry->performed_on?->format('d/m/Y') ?? '-').')';
-                $section->parentNode->insertBefore($this->paragraph($dom, $details), $section);
-                if (filled($entry->notes)) {
-                    $section->parentNode->insertBefore($this->paragraph($dom, $entry->notes), $section);
+        foreach ($report->assets as $assetIndex => $asset) {
+            $previousMonth = null;
+            foreach ($asset->entries->sortBy(fn ($entry) => sprintf('%02d-%s', $entry->month, $entry->operation)) as $entry) {
+                if ($previousMonth !== $entry->month) {
+                    $months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                    $group = $this->paragraph($dom, ($assetIndex + 1).'. '.($asset->nama_aset ?? '').' - '.$months[$entry->month - 1].' '.$report->tahun);
+                    $pr = $dom->createElementNS(self::W_NS, 'w:pPr');
+                    $outline = $dom->createElementNS(self::W_NS, 'w:outlineLvl');
+                    $outline->setAttributeNS(self::W_NS, 'w:val', '1');
+                    $pr->appendChild($outline);
+                    $group->insertBefore($pr, $group->firstChild);
+                    $section->parentNode->insertBefore($group, $section);
+                    $previousMonth = $entry->month;
                 }
-                foreach ($entry->attachments as $file) {
+                $details = ucfirst($entry->operation).' | '.($entry->result ? ucfirst($entry->result) : 'Belum lengkap').' | '.($entry->performed_on?->locale('id')->translatedFormat('j F Y') ?? 'Tanggal belum diisi');
+                $activity = $this->paragraph($dom, $details);
+                $section->parentNode->insertBefore($activity, $section);
+                if (filled($entry->notes)) {
+                    $section->parentNode->insertBefore($this->paragraph($dom, 'Catatan: '.$entry->notes), $section);
+                }
+                foreach ($entry->attachments->values() as $fileIndex => $file) {
                     abort_unless($file->disk === 'local' && str_starts_with($file->path, 'smki/backup-restore/'.$report->id.'/') && ! str_contains($file->path, '..') && Storage::disk('local')->exists($file->path), 503, 'Bukti kegiatan tidak tersedia.');
-                    $section->parentNode->insertBefore($this->paragraph($dom, $caption.' - '.$file->original_name), $section);
+                    $section->parentNode->insertBefore($this->paragraph($dom, 'Bukti '.($fileIndex + 1)), $section);
                     $p = $this->paragraph($dom, '');
                     $section->parentNode->insertBefore($p, $section);
                     $this->embedImage($zip, $dom, $p, Storage::disk('local')->path($file->path), 640);

@@ -7,6 +7,32 @@ use Tests\Support\BackupRestoreTestCase;
 
 class BackupRestoreReportTest extends BackupRestoreTestCase
 {
+    public function test_draft_signer_refresh_is_explicit_versioned_and_final_snapshots_cannot_be_refreshed(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+        DB::table('pegawai')->where('id', 2)->update(['jabatan' => '', 'pangkat' => '']);
+        $created = $this->postJson('/api/smki/backup-restore', $this->payload())->assertCreated()->json('data');
+        DB::table('pegawai')->where('id', 2)->update(['jabatan' => 'Teknisi terbaru', 'pangkat' => 'III/b']);
+        $url = '/api/smki/backup-restore/'.$created['id'];
+        $this->putJson($url, $this->payload(['version' => 1]))->assertOk()->assertJsonPath('data.pelaksana_jabatan', '');
+        $this->putJson($url, $this->payload(['version' => 2, 'refresh_signatories' => ['pelaksana']]))
+            ->assertOk()->assertJsonPath('data.version', 3)->assertJsonPath('data.pelaksana_jabatan', 'Teknisi terbaru')->assertJsonPath('data.pelaksana_pangkat', 'III/b');
+        $this->putJson($url, $this->payload(['version' => 2, 'refresh_signatories' => ['pelaksana']]))->assertStatus(409);
+        $this->putJson($url, $this->payload(['version' => 3, 'finalize' => true]))->assertOk()->assertJsonPath('data.status', 'final');
+        $this->putJson($url, $this->payload(['version' => 4, 'refresh_signatories' => ['pelaksana']]))
+            ->assertUnprocessable()->assertJsonValidationErrors('refresh_signatories');
+        $this->getJson($url)->assertJsonPath('data.version', 4)->assertJsonPath('data.pelaksana_jabatan', 'Teknisi terbaru');
+    }
+
+    public function test_final_errors_name_missing_signer_fields_without_inventing_values(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+        DB::table('pegawai')->where('id', 1)->update(['jabatan' => '', 'pangkat' => '']);
+        $response = $this->postJson('/api/smki/backup-restore', $this->payload(['finalize' => true]))->assertUnprocessable();
+        $this->assertStringContainsString('jabatan, pangkat', $response->json('errors.penanggung_jawab_pegawai_id.0'));
+        $this->assertSame(0, DB::table('smki_backup_restore_reports')->count());
+    }
+
     public function test_zero_note_is_meaningful_in_draft_and_requires_completion_for_final(): void
     {
         $this->actingAs($this->account(), 'sanctum');

@@ -17,6 +17,45 @@ use ZipArchive;
 
 class BackupRestoreExportTest extends BackupRestoreTestCase
 {
+    public function test_export_groups_evidence_without_repeated_results_and_compacts_summary_sheet(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->account(), 'sanctum');
+        $data = $this->payload();
+        $data['assets'][0]['entries'] = [];
+        foreach ([1, 2, 3] as $month) {
+            foreach (['backup', 'restore'] as $operation) {
+                $data['assets'][0]['entries'][] = ['month' => $month, 'operation' => $operation, 'result' => 'berhasil', 'performed_on' => sprintf('2026-%02d-03', $month), 'notes' => 'Catatan penting '.$month];
+            }
+        }
+        $created = $this->postJson('/api/smki/backup-restore', $data)->assertCreated()->json('data');
+        $path = $this->get('/api/smki/backup-restore/'.$created['id'].'/export-docx')->assertOk()->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new ZipArchive;
+            $zip->open($path);
+            $doc = new DOMDocument;
+            $doc->loadXML($zip->getFromName('word/document.xml'));
+            $xp = new DOMXPath($doc);
+            $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
+            $this->assertStringNotContainsString('(hasil:', $doc->textContent);
+            foreach (['Januari', 'Februari', 'Maret'] as $month) {
+                $this->assertSame(1, substr_count($doc->textContent, '1. Switch - '.$month.' 2026'));
+            }
+            foreach ([1, 2, 3] as $month) {
+                $cell = $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc['.($month + 1).']')->item(0)->textContent;
+                $this->assertStringContainsString('B: Berhasil 03/'.sprintf('%02d', $month), $cell);
+                $this->assertStringContainsString('R: Berhasil 03/'.sprintf('%02d', $month), $cell);
+            }
+            $this->assertGreaterThan(0, $xp->query('/w:document/w:body/w:tbl[1]//w:rPr/w:sz[@w:val="18"]')->length);
+            $this->assertSame('0', $xp->query('/w:document/w:body/w:tbl[2]/w:tblPr/w:tblInd')->item(0)->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w'));
+            foreach ($xp->query('/w:document/w:body/w:tbl[2]//wp:extent') as $image) {
+                $this->assertLessThanOrEqual(2286000, (int) $image->getAttribute('cx'));
+            }
+            $zip->close();
+        } finally { @unlink($path); }
+    }
+
     public function test_zero_note_and_extreme_aspect_image_are_visible_in_export(): void
     {
         Storage::fake('local');
@@ -34,7 +73,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $xp = new DOMXPath($dom);
             $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
             $xp->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
-            $this->assertCount(1, $xp->query('//w:p[w:r/w:t="0"]'));
+            $this->assertCount(1, $xp->query('//w:p[w:r/w:t="Catatan: 0"]'));
             foreach ($xp->query('//wp:extent') as $extent) {
                 $this->assertGreaterThan(0, (int) $extent->getAttribute('cx'));
                 $this->assertGreaterThan(0, (int) $extent->getAttribute('cy'));

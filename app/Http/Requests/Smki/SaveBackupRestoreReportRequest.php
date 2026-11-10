@@ -38,6 +38,8 @@ class SaveBackupRestoreReportRequest extends FormRequest
             'nomor_revisi' => [$required, 'string', 'max:30'],
             'tanggal_terbit' => [$required, 'date_format:Y-m-d'],
             'finalize' => ['sometimes', 'boolean'],
+            'refresh_signatories' => [Rule::prohibitedIf($this->report()?->status === 'final'), 'sometimes', 'array', 'list', 'max:2'],
+            'refresh_signatories.*' => ['required', Rule::in(['pelaksana', 'penanggung_jawab']), 'distinct'],
             'assets' => ['present', 'array', 'list', 'max:50', $final ? 'min:1' : 'min:0'],
             'assets.*' => ['array:id,client_key,urutan,aset_ti_id,virtual_instance_id,kode_aset,nama_aset,entries'],
             // Ownership is checked against the report's batched children inside the save transaction.

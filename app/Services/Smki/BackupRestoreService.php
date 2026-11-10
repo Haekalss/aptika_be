@@ -27,9 +27,13 @@ class BackupRestoreService
             } else {
                 $current->fill(['bidang_id' => $user->bidang_id, 'created_by' => $user->id, 'unit_kerja_nama' => $user->bidang->name]);
             }
+            $refresh = $data['refresh_signatories'] ?? [];
+            if ($current->status === 'final' && $refresh !== []) {
+                throw ValidationException::withMessages(['refresh_signatories' => 'Identitas dokumen Final tidak dapat disinkronkan ulang dari master.']);
+            }
             foreach (['pelaksana', 'penanggung_jawab'] as $role) {
                 $id = $data[$role.'_pegawai_id'] ?? null;
-                if (! $current->exists || (int) $current->{$role.'_pegawai_id'} !== (int) $id) {
+                if (! $current->exists || (int) $current->{$role.'_pegawai_id'} !== (int) $id || in_array($role, $refresh, true)) {
                     $pegawai = $id ? Pegawai::findOrFail($id) : null;
                     $current->{$role.'_pegawai_id'} = $id;
                     foreach (['nama', 'nip', 'jabatan', 'pangkat'] as $field) {
@@ -40,12 +44,17 @@ class BackupRestoreService
             $current->fill(Arr::only($data, ['tahun', 'nomor_dokumen', 'nomor_revisi', 'tanggal_terbit']));
             $current->status = $current->status === 'final' || ($data['finalize'] ?? false) ? 'final' : 'draft';
             if ($current->status === 'final') {
+                $identityErrors = [];
                 foreach (['pelaksana', 'penanggung_jawab'] as $role) {
-                    foreach (['nama', 'nip', 'jabatan', 'pangkat'] as $field) {
-                        if (trim((string) $current->{$role.'_'.$field}) === '') {
-                            throw ValidationException::withMessages([$role.'_pegawai_id' => 'Lengkapi nama, NIP, jabatan dan pangkat pegawai sebelum Final.']);
-                        }
+                    $missing = array_filter(['nama', 'nip', 'jabatan', 'pangkat'], fn ($field) => trim((string) $current->{$role.'_'.$field}) === '');
+                    if ($missing !== []) {
+                        $label = $role === 'pelaksana' ? 'Pelaksana' : 'Penanggung Jawab';
+                        $fields = implode(', ', array_map(fn ($field) => $field === 'nip' ? 'NIP' : $field, $missing));
+                        $identityErrors[$role.'_pegawai_id'] = "$label belum lengkap: $fields. Lengkapi master pegawai, lalu perbarui identitas draf sebelum Final.";
                     }
+                }
+                if ($identityErrors !== []) {
+                    throw ValidationException::withMessages($identityErrors);
                 }
             }
             $current->finalized_at = $current->status === 'final' ? ($current->finalized_at ?? now()) : null;
