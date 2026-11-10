@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "barryvdh/laravel-dompdf": "^3.1",
         "chillerlan/php-qrcode": "^6.0",
         "darkaonline/l5-swagger": "^11.0",
         "laravel/framework": "^11.0",
@@ -83,8 +84,10 @@
         "sort-packages": true,
         "platform-check": false,
         "http2": false,
-        "audit": {
-            "block-insecure": false
+        "policy": {
+            "advisories": {
+                "block": false
+            }
         },
         "allow-plugins": {
             "pestphp/pest-plugin": true,

@@ -102,16 +102,15 @@ class TteResolverController extends Controller
     }
 
     /**
-     * GET /api/tte/resolve/image?nip=...&nama=...&qr=1|0
-     * `qr=0` menyajikan spesimen tanpa QR verifikasi (FR-021).
+     * GET /api/tte/resolve/image?nip=...&nama=...&include_qr=0
      */
     public function image(Request $request)
     {
         $nip = trim((string) $request->query('nip', ''));
         $nama = trim((string) $request->query('nama', ''));
-        $withQr = $request->query('qr', '1') !== '0';
 
-        $path = $this->resolver->imagePath($nip, $nama, $withQr);
+        $request->validate(['include_qr' => ['sometimes', 'boolean']]);
+        $path = $this->resolver->imagePath($nip, $nama, $request->boolean('include_qr', true));
 
         if ($path === null) {
             return response()->json([

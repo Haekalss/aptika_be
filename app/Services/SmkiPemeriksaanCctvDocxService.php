@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SmkiPemeriksaanCctv;
+use App\Services\Concerns\InsertsTteImage;
 use DOMDocument;
 use DOMXPath;
 use Exception;
@@ -10,6 +11,7 @@ use ZipArchive;
 
 class SmkiPemeriksaanCctvDocxService
 {
+    use InsertsTteImage;
     private const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
     private const MONTHS = [
@@ -139,13 +141,32 @@ class SmkiPemeriksaanCctvDocxService
         }
 
         // Nama pemeriksa pada kolom tanda tangan: "(…………)" -> "(Nama)"
+        // Gambar spesimen TTE disisipkan SEBELUM penggantian teks agar
+        // XPath penanda "(…)" masih cocok (pola SmkiReviewLogDocxService).
         $nama = trim((string) $pemeriksaan->nama_pemeriksa);
-        if ($nama !== '') {
+        $nip = trim((string) ($pemeriksaan->nip_pemeriksa ?? ''));
+        if ($nama !== '' || $nip !== '') {
+            $ttePath = $this->resolveTtePath($nip, $nama);
             // '//w:p' karena baris nama berada di dalam kotak teks di dasar halaman
             foreach ($xpath->query('//w:p') as $p) {
                 $text = trim(preg_replace('/\s+/u', ' ', $p->textContent));
                 if (preg_match('/^\(\s*[….\.]+\s*\)$/u', $text)) {
-                    $this->setParagraphText($dom, $xpath, $p, ' (' . $nama . ')');
+                    // Pola FR-008: bila gambar berhasil disisipkan, paragraf "(…)"
+                    // dihapus dan nama/NIP tidak ditulis ulang (sudah di dalam gambar).
+                    if ($ttePath !== null) {
+                        $imgPara = $this->tteImageParagraph($dom, 'center');
+                        if ($this->insertTteImage($zip, $dom, $xpath, $imgPara, $ttePath, 300)) {
+                            $p->parentNode->insertBefore($imgPara, $p);
+                            $p->parentNode->removeChild($p);
+                            break;
+                        }
+                    }
+                    $this->setParagraphText($dom, $xpath, $p, ' (' . ($nama !== '' ? $nama : '…') . ')');
+                    if ($nip !== '') {
+                        $nipPara = $p->cloneNode(true);
+                        $this->setParagraphText($dom, $xpath, $nipPara, 'NIP. ' . $nip, 'center');
+                        $p->parentNode->insertBefore($nipPara, $p->nextSibling);
+                    }
                     break;
                 }
             }

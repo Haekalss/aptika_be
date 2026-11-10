@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SmkiNotulen;
+use App\Services\Concerns\InsertsTteImage;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
@@ -12,6 +13,7 @@ use ZipArchive;
 
 class SmkiNotulenDocxService
 {
+    use InsertsTteImage;
     /**
      * Cari path template dokumen FR-011 Formulir Notulen Management Review SMKI.
      */
@@ -124,6 +126,9 @@ class SmkiNotulenDocxService
         // =========================================================================
         // 2. Paragraf Judul Rapat, Tindak Lanjut, Tanggal TTD, dan Nama TTD
         // =========================================================================
+        // Kumpulkan dulu target tanda tangan; penyisipan gambar TTE dilakukan
+        // SETELAH loop agar DOM tidak dimodifikasi saat XPath masih diiterasi.
+        $tteTargets = [];
         foreach ($xpath->query('//w:p') as $p) {
             $pText = $p->textContent;
 
@@ -153,13 +158,23 @@ class SmkiNotulenDocxService
             // Notulis
             if (str_contains($pText, '(Notulis)')) {
                 $notulisName = $notulen->notulis ?: 'Notulis';
-                $this->replaceTextInNodeStrict($xpath, $p, '(Notulis)', '(' . $notulisName . ')');
+                $tteTargets['notulis'] = [$p, (string) ($notulen->notulis_nip ?? ''), (string) $notulen->notulis, $notulisName, '(Notulis)'];
             }
 
             // Koordinator SMKI
             if (str_contains($pText, '(…………………………………….)')) {
                 $koordName = $notulen->koordinator_smki ?: '…………………………………….';
-                $this->replaceTextInNodeStrict($xpath, $p, '(…………………………………….)', '(' . $koordName . ')');
+                $tteTargets['koordinator'] = [$p, (string) ($notulen->koordinator_nip ?? ''), (string) $notulen->koordinator_smki, $koordName, '(…………………………………….)'];
+            }
+        }
+
+        // Sisipkan spesimen TTE + NIP untuk tiap penanda tangan yang terkumpul.
+        // Pola FR-008: nama/NIP teks hanya ditulis bila gambar gagal disisipkan.
+        foreach ($tteTargets as [$target, $nip, $nama, $displayName, $placeholder]) {
+            $ok = $this->insertSignerTte($zip, $dom, $xpath, $target, $nip, $nama);
+            if (!$ok) {
+                $this->replaceTextInNodeStrict($xpath, $target, $placeholder, '(' . $displayName . ')');
+                $this->appendNipLine($dom, $xpath, $target, $nip);
             }
         }
 
@@ -398,6 +413,42 @@ class SmkiNotulenDocxService
             $r->appendChild($t);
         }
         $p->appendChild($r);
+    }
+
+    /**
+     * Sisipkan gambar spesimen TTE tepat di atas paragraf nama penanda tangan.
+     * Dipanggil SEBELUM teks "(…)" ditimpa agar penanda masih cocok.
+     * Mengembalikan true bila gambar berhasil disisipkan (paragraf "(…)" ikut dihapus pola FR-008).
+     */
+    private function insertSignerTte($zip, DOMDocument $dom, DOMXPath $xpath, $target, string $nip, string $nama): bool
+    {
+        $path = $this->resolveTtePath($nip, $nama);
+        if ($path === null) {
+            return false;
+        }
+        $imgPara = $this->tteImageParagraph($dom, 'center');
+        if ($this->insertTteImage($zip, $dom, $xpath, $imgPara, $path, 200)) {
+            $target->parentNode->insertBefore($imgPara, $target);
+            $target->parentNode->removeChild($target);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Tambahkan baris "NIP. …" tepat di bawah paragraf nama penanda tangan.
+     */
+    private function appendNipLine(DOMDocument $dom, DOMXPath $xpath, $namePara, string $nip): void
+    {
+        $nip = trim($nip);
+        if ($nip === '') {
+            return;
+        }
+        $current = $namePara->textContent;
+        $clone = $namePara->cloneNode(true);
+        $this->replaceTextInNodeStrict($xpath, $clone, $current, 'NIP. ' . $nip);
+        $namePara->parentNode->insertBefore($clone, $namePara->nextSibling);
     }
 
     /**

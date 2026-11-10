@@ -293,13 +293,36 @@ class SmkiByodDocxService
             $prev = $prev->previousSibling;
         }
 
-        $imgPara = $this->tteImageParagraph($dom);
+        // Pola FR-008: bila gambar ada, nama tidak ditulis ulang (sudah di dalam kotak spesimen);
+        // bila gambar gagal, tulis "(Nama)" sebagai fallback.
         $path = ($nip === '' && $nama === '')
             ? null
             : app(TteResolverService::class)->imagePath($nip, $nama);
-
-        if ($path !== null && $this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 300)) {
-            $anchor->parentNode->insertBefore($imgPara, $anchor);
+        $inserted = false;
+        if ($path !== null) {
+            $imgPara = $this->tteImageParagraph($dom);
+            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 360)) {
+                $anchor->parentNode->insertBefore($imgPara, $anchor);
+                $inserted = true;
+            }
+        }
+        if (!$inserted && $nama !== '') {
+            $namePara = $this->tteImageParagraph($dom, 'center');
+            $run = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+            $textNode = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
+            $textNode->appendChild($dom->createTextNode('(' . $nama . ')'));
+            $run->appendChild($textNode);
+            $namePara->appendChild($run);
+            $anchor->parentNode->insertBefore($namePara, $anchor);
+            if ($nip !== '') {
+                $nipPara = $this->tteImageParagraph($dom, 'center');
+                $nipRun = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+                $nipText = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
+                $nipText->appendChild($dom->createTextNode('NIP. ' . $nip));
+                $nipRun->appendChild($nipText);
+                $nipPara->appendChild($nipRun);
+                $anchor->parentNode->insertBefore($nipPara, $anchor);
+            }
         }
 
         // Buang placeholder & kotak kosong (baik saat gambar berhasil

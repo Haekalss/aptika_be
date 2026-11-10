@@ -17,5 +17,15 @@ class SmkiKomunikasiHeader extends Model
         'no_dokumen',
         'no_revisi',
         'tanggal_berlaku',
+        'disusun_nama',
+        'disusun_nip',
+        'mengetahui_nama',
+        'mengetahui_nip',
+        'kota',
+        'tanggal_ttd',
+    ];
+
+    protected $casts = [
+        'tanggal_ttd' => 'date',
     ];
 }

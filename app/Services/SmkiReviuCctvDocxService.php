@@ -77,8 +77,9 @@ class SmkiReviuCctvDocxService
         $this->fillItems($dom, $xp, $table, $reviu);
         // Gambar disisipkan SEBELUM fillSignature, karena fillSignature sudah
         // mengganti teks "(…)" menjadi "(Nama)" sehingga paragraf penanda hilang.
-        $this->fillTteImage($zip, $dom, $xp, $reviu, $tteOverride);
-        $this->fillSignature($dom, $xp, $reviu, $tteOverride);
+        // Pola FR-008: bila gambar sukses, fillSignature dilewati (nama+NIP sudah di dalam gambar).
+        $hasTte = $this->fillTteImage($zip, $dom, $xp, $reviu, $tteOverride);
+        $this->fillSignature($dom, $xp, $reviu, $tteOverride, $hasTte);
         $this->fitTablesToWidth($xp, $this->contentWidth($xp), '//w:body//w:tbl');
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
@@ -157,9 +158,12 @@ class SmkiReviuCctvDocxService
         }
     }
 
-    /** "(……………)" -> "(Nama)" dan baris "NIP. ..." di bawahnya. */
-    private function fillSignature($dom, $xp, SmkiReviuCctv $reviu, ?array $override = null): void
+    /** "(……………)" -> "(Nama)" dan baris "NIP. ..." di bawahnya. Dilewati bila gambar TTE sudah tersisip (pola FR-008). */
+    private function fillSignature($dom, $xp, SmkiReviuCctv $reviu, ?array $override = null, bool $hasTte = false): void
     {
+        if ($hasTte) {
+            return;
+        }
         $this->keepSignatureTogether($dom, $xp);
 
         $nama = trim((string) ($override['nama'] ?? $reviu->pengelola_nama));
@@ -217,18 +221,20 @@ class SmkiReviuCctvDocxService
      *
      * Sumber gambar ditentukan lewat TteSpecimenService: master spesimen TTE dulu
      * (dicocokkan NIP/nama), fallback ke master pegawai.
+     *
+     * @return bool true bila gambar berhasil disisipkan (paragraf "(…)" ikut dihapus pola FR-008).
      */
-    private function fillTteImage($zip, $dom, $xp, SmkiReviuCctv $reviu, ?array $override = null): void
+    private function fillTteImage($zip, $dom, $xp, SmkiReviuCctv $reviu, ?array $override = null): bool
     {
         $nip = trim((string) ($override['nip'] ?? $reviu->pengelola_nip));
         $nama = trim((string) ($override['nama'] ?? $reviu->pengelola_nama));
         if ($nip === '' && $nama === '') {
-            return;
+            return false;
         }
 
         $path = app(\App\Services\TteResolverService::class)->imagePath($nip, $nama);
         if ($path === null) {
-            return;
+            return false;
         }
 
         // Paragraf "(Nama)" jadi titik sisip; gambar ditaruh tepat sebelum paragraf itu.
@@ -240,7 +246,7 @@ class SmkiReviuCctvDocxService
             }
         }
         if (!$target) {
-            return;
+            return false;
         }
 
         $imgPara = $dom->createElementNS(self::W_NS, 'w:p');
@@ -251,8 +257,12 @@ class SmkiReviuCctvDocxService
         $pPr->appendChild($spacing);
         $imgPara->appendChild($pPr);
 
-        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 280)) {
+        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 340)) {
             $target->parentNode->insertBefore($imgPara, $target);
+            $target->parentNode->removeChild($target);
+            return true;
         }
+
+        return false;
     }
 }

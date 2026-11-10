@@ -345,7 +345,7 @@ class SmkiHardeningDocxService
                 }
                 if ($auditorTarget) {
                     $imgPara = $this->tteImageParagraph($dom, 'left');
-                    if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgPara, $ttePath, 200)) {
+                    if ($this->insertImageIntoParagraph($zip, $dom, $xpath, $imgPara, $ttePath, 240)) {
                         $auditorTarget->parentNode->insertBefore($imgPara, $auditorTarget);
                         // Hapus teks nama manual di bawahnya karena nama sudah tercantum resmi di dalam kotak spesimen TTE
                         if ($auditorTarget->parentNode) {

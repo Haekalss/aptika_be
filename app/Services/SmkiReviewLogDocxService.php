@@ -74,8 +74,9 @@ class SmkiReviewLogDocxService
         $this->fillTindakLanjut($dom, $xp, $rows->item(5), $log);
         // Gambar harus disisipkan SEBELUM fillSignature, karena method itu
         // mengganti teks paragraf "(…)" menjadi "(Nama)".
-        $this->fillTteImages($zip, $dom, $xp, $log);
-        $this->fillSignature($dom, $xp, $rows->item(6), $rows->item(7), $log);
+        // Pola FR-008: nama/NIP teks dilewati untuk sel yang gambarnya sukses.
+        $tteOk = $this->fillTteImages($zip, $dom, $xp, $log);
+        $this->fillSignature($dom, $xp, $rows->item(6), $rows->item(7), $log, $tteOk);
 
         $zip->addFromString('word/document.xml', $dom->saveXML());
         $zip->close();
@@ -168,8 +169,10 @@ class SmkiReviewLogDocxService
      * Sisipkan gambar spesimen TTE tepat di atas paragraf "(Nama)" pada setiap
      * kolom tanda tangan. Paragraf kosong yang semula disediakan untuk tanda
      * tangan manual dibuang, sehingga tinggi blok tidak membengkak.
+     *
+     * @return array<int,bool> indeks kolom yang gambarnya berhasil disisipkan.
      */
-    private function fillTteImages($zip, $dom, $xp, SmkiReviewLog $log): void
+    private function fillTteImages($zip, $dom, $xp, SmkiReviewLog $log): array
     {
         $people = [
             [trim((string) $log->dibuat_oleh_nama), trim((string) $log->dibuat_oleh_nip)],
@@ -183,10 +186,11 @@ class SmkiReviewLogDocxService
             }
         }
         if ($targets === []) {
-            return;
+            return [];
         }
 
         $resolver = app(TteResolverService::class);
+        $ok = [];
 
         foreach ($targets as $i => $target) {
             [$nama, $nip] = $people[$i] ?? ['', ''];
@@ -207,10 +211,16 @@ class SmkiReviewLogDocxService
             }
 
             $imgPara = $this->tteImageParagraph($dom);
-            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 250)) {
+            if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 300)) {
                 $target->parentNode->insertBefore($imgPara, $target);
+                // Pola FR-008: paragraf "(…)" dihapus karena nama sudah tercantum
+                // resmi di dalam kotak spesimen TTE.
+                $target->parentNode->removeChild($target);
+                $ok[$i] = true;
             }
         }
+
+        return $ok;
     }
 
     /** Paragraf kosong berisi gambar (dipakai sebagai wadah gambar TTE). */
@@ -235,7 +245,7 @@ class SmkiReviewLogDocxService
         return $p;
     }
 
-    private function fillSignature($dom, $xp, $dateRow, $signRow, SmkiReviewLog $log): void
+    private function fillSignature($dom, $xp, $dateRow, $signRow, SmkiReviewLog $log, array $tteOk = []): void
     {
         // "Bandung, ……………" -> "Kota, tanggal"
         $di = trim((string) $log->ditandatangani_di) ?: 'Bandung';
@@ -255,6 +265,11 @@ class SmkiReviewLogDocxService
         foreach ($people as $i => [$nama, $nip]) {
             if ($i >= $cells->length) {
                 break;
+            }
+            // Pola FR-008: nama/NIP teks dilewati bila gambar TTE sudah tersisip
+            // (nama+NIP sudah tercantum resmi di dalam kotak spesimen).
+            if (!empty($tteOk[$i])) {
+                continue;
             }
             $paras = $xp->query('w:p', $cells->item($i));
             $namePara = $paras->item($paras->length - 1);

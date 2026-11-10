@@ -1473,6 +1473,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.komunikasi.destroy',
                 ]);
 
+            // Formulir Review Hak Akses (FR-034)
+            Route::get('review-hak-akses/lookup', [\App\Http\Controllers\Smki\SmkiReviewHakAksesController::class, 'lookup']);
+            Route::apiResource('review-hak-akses', \App\Http\Controllers\Smki\SmkiReviewHakAksesController::class);
+
             // Formulir Log Perubahan (FR-032)
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
@@ -1522,10 +1526,43 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('penyedia', [\App\Http\Controllers\Smki\SmkiPenyediaJasaController::class, 'store'])
                 ->name('smki.penyedia.store');
 
+            Route::get('backup-restore/lookup', [\App\Http\Controllers\Smki\SmkiBackupRestoreController::class, 'lookup']);
+            Route::get('backup-restore/{report}/signatories/{role}/specimen', [\App\Http\Controllers\Smki\SmkiBackupRestoreExportController::class, 'specimen'])->whereNumber('report')->whereIn('role', ['pelaksana', 'penanggung-jawab']);
+            Route::get('backup-restore/{report}/export-docx', [\App\Http\Controllers\Smki\SmkiBackupRestoreExportController::class, 'docx'])->whereNumber('report');
+            Route::post('backup-restore/{report}/entries/{entry}/attachments', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'store'])->whereNumber(['report', 'entry']);
+            Route::get('backup-restore/{report}/attachments/{attachment}', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'show'])->whereNumber(['report', 'attachment']);
+            Route::delete('backup-restore/{report}/attachments/{attachment}', [\App\Http\Controllers\Smki\SmkiBackupRestoreAttachmentController::class, 'destroy'])->whereNumber(['report', 'attachment']);
+            Route::apiResource('backup-restore', \App\Http\Controllers\Smki\SmkiBackupRestoreController::class)
+                ->parameters(['backup-restore' => 'report'])->whereNumber('report');
+
             Route::get('removable-media/lookup', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'lookup']);
             Route::get('removable-media/{removable_media}/export-data', [\App\Http\Controllers\Smki\SmkiRemovableMediaController::class, 'exportData']);
             Route::apiResource('removable-media', \App\Http\Controllers\Smki\SmkiRemovableMediaController::class)
                 ->parameters(['removable-media' => 'removable_media']);
+
+            // Capacity Planning (FR-026)
+            Route::get('capacity-planning/export-data', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'exportData'])
+                ->name('smki.capacity-planning.export-data');
+            Route::get('capacity-planning', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'index'])
+                ->name('smki.capacity-planning.index');
+            Route::post('capacity-planning/assets', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'store'])
+                ->name('smki.capacity-planning.assets.store');
+            Route::put('capacity-planning/assets/{asset}', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'update'])
+                ->name('smki.capacity-planning.assets.update');
+            Route::delete('capacity-planning/assets/{asset}', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'destroy'])
+                ->name('smki.capacity-planning.assets.destroy');
+            Route::put('capacity-planning/assets/{asset}/logs', [\App\Http\Controllers\Smki\SmkiCapacityPlanningController::class, 'saveLog'])
+                ->name('smki.capacity-planning.logs.save');
+            // Daftar Aset Virtual (FR-035)
+            Route::apiResource('daftar-aset-virtual', \App\Http\Controllers\Smki\SmkiDaftarAsetVirtualController::class)
+                ->parameters(['daftar-aset-virtual' => 'daftar_aset_virtual'])
+                ->names([
+                    'index' => 'smki.daftar-aset-virtual.index',
+                    'store' => 'smki.daftar-aset-virtual.store',
+                    'show' => 'smki.daftar-aset-virtual.show',
+                    'update' => 'smki.daftar-aset-virtual.update',
+                    'destroy' => 'smki.daftar-aset-virtual.destroy',
+                ]);
 
             Route::get('software-standar/lookup', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'lookup']);
             Route::get('software-standar/export-docx', [\App\Http\Controllers\Smki\SmkiSoftwareStandarController::class, 'exportDocx']);
@@ -1758,6 +1795,24 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'destroy' => 'smki.hak-akses-fisik.destroy',
                 ]);
 
+            // Risk Register (FR-002)
+            Route::get('risk-register/lookup', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'lookup'])
+                ->name('smki.risk-register.lookup');
+            Route::get('risk-register/export-excel', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'exportExcel'])
+                ->name('smki.risk-register.export-excel');
+            Route::get('risk-register/export-pdf', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'exportPdf'])
+                ->name('smki.risk-register.export-pdf');
+            Route::post('risk-register/update-header', [\App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class, 'updateHeader'])
+                ->name('smki.risk-register.update-header');
+            Route::apiResource('risk-register', \App\Http\Controllers\Smki\SmkiFr002RiskRegisterController::class)
+                ->names([
+                    'index'   => 'smki.risk-register.index',
+                    'store'   => 'smki.risk-register.store',
+                    'show'    => 'smki.risk-register.show',
+                    'update'  => 'smki.risk-register.update',
+                    'destroy' => 'smki.risk-register.destroy',
+                ]);
+
             // Formulir Hak Akses TI (FR-018)
             Route::get('hak-akses-ti/lookup', [\App\Http\Controllers\Smki\HakAksesTiController::class, 'lookup'])
                 ->name('smki.hak-akses-ti.lookup');
@@ -1853,6 +1908,19 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'show'    => 'smki.screening-karyawan.show',
                     'update'  => 'smki.screening-karyawan.update',
                     'destroy' => 'smki.screening-karyawan.destroy',
+                ]);
+
+            // Matriks Kompetensi SMKI (FR-031)
+            Route::get('matrix-competency/lookup', [\App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class, 'lookup'])
+                ->name('smki.matrix-competency.lookup');
+            Route::apiResource('matrix-competency', \App\Http\Controllers\Smki\SmkiMatrixCompetencyController::class)
+                ->parameters(['matrix-competency' => 'id'])
+                ->names([
+                    'index'   => 'smki.matrix-competency.index',
+                    'store'   => 'smki.matrix-competency.store',
+                    'show'    => 'smki.matrix-competency.show',
+                    'update'  => 'smki.matrix-competency.update',
+                    'destroy' => 'smki.matrix-competency.destroy',
                 ]);
         });
 

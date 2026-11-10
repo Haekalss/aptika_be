@@ -22,10 +22,14 @@ class SmkiPemeriksaanCctv extends Model
         'tanggal_pemeriksaan',
         'kesesuaian_waktu',
         'nama_pemeriksa',
+        'nip_pemeriksa',
+        'ditandatangani_di',
+        'tanggal_ttd',
     ];
 
     protected $casts = [
         'tanggal_pemeriksaan' => 'date:Y-m-d',
+        'tanggal_ttd' => 'date:Y-m-d',
     ];
 
     public function items(): HasMany

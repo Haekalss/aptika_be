@@ -402,7 +402,7 @@ class SmkiLaporanAuditTahunanDocxService
                         }
 
                         $imgPara = $this->tteImageParagraph($dom);
-                        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 200)) {
+                        if ($this->insertImageIntoParagraph($zip, $dom, $xp, $imgPara, $path, 320)) {
                             $target->parentNode->insertBefore($imgPara, $target);
                             // Hapus teks nama manual di bawahnya karena nama sudah tercantum resmi di dalam kotak spesimen TTE
                             if ($target->parentNode) {
@@ -410,9 +410,21 @@ class SmkiLaporanAuditTahunanDocxService
                             }
                         } else {
                             $this->setPText($dom, $xp, $target, '(' . ($nama ?: '…………………………………….') . ')');
+                            if ($nip !== '') {
+                                $nipPara = $target->cloneNode(true);
+                                $this->setPText($dom, $xp, $nipPara, 'NIP. ' . $nip);
+                                $this->centerP($dom, $xp, $nipPara);
+                                $target->parentNode->insertBefore($nipPara, $target->nextSibling);
+                            }
                         }
                     } else {
                         $this->setPText($dom, $xp, $target, '(' . ($nama ?: '…………………………………….') . ')');
+                        if ($nip !== '') {
+                            $nipPara = $target->cloneNode(true);
+                            $this->setPText($dom, $xp, $nipPara, 'NIP. ' . $nip);
+                            $this->centerP($dom, $xp, $nipPara);
+                            $target->parentNode->insertBefore($nipPara, $target->nextSibling);
+                        }
                     }
                 }
 
