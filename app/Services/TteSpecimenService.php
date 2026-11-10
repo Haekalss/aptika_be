@@ -24,6 +24,8 @@ use GdImage;
  *
  * Gambar di-cache di storage/app/tte/ dengan nama berbasis hash isi, sehingga
  * satu pegawai = satu file, dan otomatis dibuat ulang bila datanya berubah.
+ * Bila $withQr = false, QR tidak digambar dan teks memakai padding normal;
+ * cache memakai hash terpisah (lihat normalize()/generate()).
  */
 class TteSpecimenService
 {
@@ -42,6 +44,8 @@ class TteSpecimenService
     private const RADIUS = 47;
     /** Indentasi teks dari tepi kiri kotak (template: 92px @1x). */
     private const PAD_X = 276;
+    /** Padding teks bila QR tidak digambar (mode tanpa QR). */
+    private const PAD_X_NO_QR = 60;
     /** Sisa ruang di kanan teks (template: 39px @1x). */
     private const PAD_KANAN = 39;
 
@@ -72,15 +76,17 @@ class TteSpecimenService
      *
      * @param  Pegawai|array  $pegawai  Model/array berisi nama, nip, jabatan, pangkat.
      * @param  string|null    $unit     Nama unit/dinas. Default: "DINAS KOMUNIKASI DAN INFORMATIKA".
+     * @param  bool           $withQr   Gambar QR verifikasi di kiri kotak (default: true).
      * @return string|null    Path absolut file PNG, atau null bila GD tidak tersedia.
      */
-    public function generate($pegawai, ?string $unit = null): ?string
+    public function generate($pegawai, ?string $unit = null, bool $withQr = true): ?string
     {
         if (!extension_loaded('gd')) {
             return null;
         }
 
         $data = $this->normalize($pegawai, $unit);
+        $data['qr'] = $withQr ? 1 : 0;
         $hash = substr(sha1(json_encode($data)), 0, 16);
 
         $dir = storage_path('app/tte');
@@ -94,7 +100,7 @@ class TteSpecimenService
             return null;
         }
 
-        $image = $this->render($data);
+        $image = $this->render($data, $withQr);
         if (!$image) {
             return null;
         }
@@ -108,13 +114,13 @@ class TteSpecimenService
     /**
      * Render tanpa cache — berguna untuk preview di browser.
      */
-    public function renderToBinary($pegawai, ?string $unit = null): ?string
+    public function renderToBinary($pegawai, ?string $unit = null, bool $withQr = true): ?string
     {
         if (!extension_loaded('gd')) {
             return null;
         }
 
-        $image = $this->render($this->normalize($pegawai, $unit));
+        $image = $this->render($this->normalize($pegawai, $unit), $withQr);
         if (!$image) {
             return null;
         }
@@ -155,15 +161,21 @@ class TteSpecimenService
         ];
     }
 
-    /** Gambar blok TTE ke kanvas GD sesuai template. */
-    private function render(array $d): ?GdImage
+    /**
+     * Gambar blok TTE ke kanvas GD sesuai template.
+     *
+     * @param  array  $d        Data spesimen hasil normalize().
+     * @param  bool   $withQr   Gambar QR verifikasi di sebelah kiri kotak (default: true).
+     */
+    private function render(array $d, bool $withQr = true): ?GdImage
     {
         $font = $this->fontPath('regular');
         if ($font === null) {
             return null;
         }
 
-        $availW = self::BOX_W - self::PAD_X - self::PAD_KANAN;
+        $textX = $withQr ? self::PAD_X : self::PAD_X_NO_QR;
+        $availW = self::BOX_W - $textX - self::PAD_KANAN;
 
         // --- Susun baris lebih dulu (jabatan bisa terbungkus) ---
         $lines = [];
@@ -236,10 +248,12 @@ class TteSpecimenService
         imagesetthickness($img, 1);
 
         // --- Sisipkan QR Code di sebelah kiri kotak ---
-        $this->drawQrCode($img, $x1, $y1, $boxH, $d);
+        if ($withQr) {
+            $this->drawQrCode($img, $x1, $y1, $boxH, $d);
+        }
 
         // --- Isi kotak (rata kiri pada satu margin) ---
-        $x = $x1 + self::PAD_X;
+        $x = $x1 + $textX;
         foreach ($lines as $line) {
             $value = trim((string) $line['text']);
             if ($value === '') {
