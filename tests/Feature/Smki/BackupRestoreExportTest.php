@@ -12,12 +12,50 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\BackupRestoreTestCase;
 use ZipArchive;
 
 class BackupRestoreExportTest extends BackupRestoreTestCase
 {
-    public function test_export_groups_evidence_without_repeated_results_and_compacts_summary_sheet(): void
+    public static function assetCounts(): array
+    {
+        return ['empty draft' => [0, 7], 'original slots filled' => [5, 7], 'maximum assets' => [50, 52]];
+    }
+
+    #[DataProvider('assetCounts')]
+    public function test_asset_counts_preserve_slots_without_dropping_real_assets(int $count, int $rowCount): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+        $data = $this->payload();
+        $asset = $data['assets'][0];
+        $data['assets'] = [];
+        for ($index = 1; $index <= $count; $index++) {
+            $data['assets'][] = [...$asset, 'client_key' => (string) Str::uuid(), 'nama_aset' => 'Aset contoh '.$index];
+        }
+        $record = $this->postJson('/api/smki/backup-restore', $data)->assertCreated()->json('data');
+        $path = $this->get('/api/smki/backup-restore/'.$record['id'].'/export-docx')->assertOk()->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new ZipArchive;
+            $zip->open($path);
+            $doc = new DOMDocument;
+            $doc->loadXML($zip->getFromName('word/document.xml'));
+            $xp = new DOMXPath($doc);
+            $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $this->assertCount($rowCount, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'));
+            for ($index = 1; $index <= $count; $index++) {
+                $this->assertSame($index.'. Aset contoh '.$index, $xp->query('/w:document/w:body/w:tbl[1]/w:tr['.($index + 2).']/w:tc[1]')->item(0)->textContent);
+            }
+            if ($count === 0) {
+                foreach ($xp->query('/w:document/w:body/w:tbl[1]/w:tr[position() > 2]/w:tc') as $cell) {
+                    $this->assertSame('', $cell->textContent, 'Unused template slots must not invent assets or activities.');
+                }
+            }
+            $zip->close();
+        } finally { @unlink($path); }
+    }
+
+    public function test_export_groups_evidence_without_repeated_results_and_preserves_template_layout(): void
     {
         Storage::fake('local');
         $this->actingAs($this->account(), 'sanctum');
@@ -43,15 +81,75 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
                 $this->assertSame(1, substr_count($doc->textContent, '1. Switch - '.$month.' 2026'));
             }
             foreach ([1, 2, 3] as $month) {
+                $monthLabel = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret'][$month];
                 $cell = $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc['.($month + 1).']')->item(0)->textContent;
-                $this->assertStringContainsString('B: Berhasil 03/'.sprintf('%02d', $month), $cell);
-                $this->assertStringContainsString('R: Berhasil 03/'.sprintf('%02d', $month), $cell);
+                $this->assertSame('B: ✓R: ✓', $cell);
+                $this->assertStringContainsString('Backup | Berhasil | 3 '.$monthLabel.' 2026', $doc->textContent);
+                $this->assertStringContainsString('Restore | Berhasil | 3 '.$monthLabel.' 2026', $doc->textContent);
             }
-            $this->assertGreaterThan(0, $xp->query('/w:document/w:body/w:tbl[1]//w:rPr/w:sz[@w:val="18"]')->length);
-            $this->assertSame('0', $xp->query('/w:document/w:body/w:tbl[2]/w:tblPr/w:tblInd')->item(0)->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w'));
+            $original = new ZipArchive;
+            $original->open(resource_path('templates/FR-030 Formulir Berita Acara Backup.docx'));
+            $source = new DOMDocument;
+            $source->loadXML($original->getFromName('word/document.xml'));
+            $sx = new DOMXPath($source);
+            $sx->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            foreach ([
+                '/w:document/w:body/w:tbl[1]/w:tblPr',
+                '/w:document/w:body/w:tbl[1]/w:tblGrid',
+                '/w:document/w:body/w:tbl[2]/w:tblPr',
+                '/w:document/w:body/w:tbl[2]/w:tblGrid',
+                '/w:document/w:body/w:tbl[2]/w:tr[2]/w:trPr/w:trHeight',
+                '//w:sectPr/w:pgSz', '//w:sectPr/w:pgMar',
+                '/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[1]/w:p/w:pPr/w:spacing',
+            ] as $query) {
+                $actual = $xp->query($query)->item(0);
+                $expected = $sx->query($query)->item(0);
+                $this->assertNotNull($actual, $query);
+                $this->assertSame($expected->C14N(), $actual->C14N(), $query);
+            }
+            $this->assertCount(7, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Keep five original asset slots for a short report.');
+            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[1]/preceding-sibling::w:p'));
+            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[preceding-sibling::w:tbl]'));
+            $this->assertCount(0, $xp->query('/w:document/w:body/w:tbl[1]//w:rPr/w:sz[@w:val="18"]'), 'Do not shrink source typography to nine points.');
+            $this->assertStringNotContainsString('SWITCH 02', $xp->query('/w:document/w:body/w:tbl[1]')->item(0)->textContent);
             foreach ($xp->query('/w:document/w:body/w:tbl[2]//wp:extent') as $image) {
-                $this->assertLessThanOrEqual(2286000, (int) $image->getAttribute('cx'));
+                $this->assertLessThanOrEqual(1905000, (int) $image->getAttribute('cx'), 'Specimen must fit the original narrow signer cells.');
             }
+            $original->close();
+            $zip->close();
+        } finally { @unlink($path); }
+    }
+
+    public function test_monthly_symbols_keep_failed_incomplete_and_unrecorded_activities_distinct(): void
+    {
+        $this->actingAs($this->account(), 'sanctum');
+        $data = $this->payload();
+        $data['assets'][0]['entries'] = [
+            ['month' => 1, 'operation' => 'backup', 'result' => 'berhasil', 'performed_on' => '2026-01-31', 'notes' => null],
+            ['month' => 1, 'operation' => 'restore', 'result' => 'gagal', 'performed_on' => '2026-01-30', 'notes' => 'Perlu pengujian ulang'],
+            ['month' => 2, 'operation' => 'backup', 'result' => 'berhasil', 'performed_on' => null, 'notes' => null],
+            ['month' => 2, 'operation' => 'restore', 'result' => null, 'performed_on' => null, 'notes' => '0'],
+        ];
+        $record = $this->postJson('/api/smki/backup-restore', $data)->assertCreated()->json('data');
+        $path = $this->get('/api/smki/backup-restore/'.$record['id'].'/export-docx')->assertOk()->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new ZipArchive;
+            $zip->open($path);
+            $dom = new DOMDocument;
+            $dom->loadXML($zip->getFromName('word/document.xml'));
+            $xp = new DOMXPath($dom);
+            $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $this->assertSame('B: ✓R: ×', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[2]')->item(0)->textContent);
+            $this->assertSame('B: ?R: ?', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[3]')->item(0)->textContent);
+            $this->assertSame('B: –R: –', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[4]')->item(0)->textContent);
+            $this->assertCount(1, $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[2]//w:br'), 'B and R each get their own line.');
+            $matrix = $xp->query('/w:document/w:body/w:tbl[1]')->item(0)->textContent;
+            $this->assertStringNotContainsString('31/01', $matrix);
+            $this->assertStringNotContainsString('Berhasil', $matrix);
+            $this->assertStringContainsString('Restore | Gagal | 30 Januari 2026', $dom->textContent);
+            $this->assertStringContainsString('Catatan: 0', $dom->textContent);
+            $this->assertStringContainsString('✓ = Berhasil', $dom->textContent);
+            $this->assertStringContainsString('× = Gagal', $dom->textContent);
             $zip->close();
         } finally { @unlink($path); }
     }
@@ -120,7 +218,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $xp = new DOMXPath($dom);
             $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
             $text = $dom->textContent;
-            foreach (['SW & <Unicode é>', 'B: Berhasil', 'R: Gagal', '03/10', '04/10', 'Restore perlu diulang', trim($data['assets'][0]['entries'][0]['notes'])] as $value) {
+            foreach (['SW & <Unicode é>', 'B: ✓', 'R: ×', '3 Oktober 2026', '4 Oktober 2026', 'Restore perlu diulang', trim($data['assets'][0]['entries'][0]['notes'])] as $value) {
                 $this->assertStringContainsString($value, $text);
             }
             $this->assertStringNotContainsString('SWITCH 02', $text);
@@ -128,10 +226,10 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $this->assertCount(3, $xp->query('//w:drawing'));
             $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[1]/w:tr[position() <= 2]/w:trPr/w:tblHeader'), 'Repeating month headings require both leading rows to repeat.');
             $this->assertCount(1, $xp->query('/w:document/w:body/w:p[starts-with(normalize-space(.), "LAMPIRAN")]/w:pPr/w:pageBreakBefore'), 'Appendix starts directly on a new page, without inherited spacer paragraphs.');
-            $this->assertCount(3, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Only the two headings and actual asset rows should remain.');
+            $this->assertCount(7, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Original five asset slots remain, with unused slots blank.');
             $this->assertCount(0, $xp->query('/w:document/w:body//w:p[not(w:pPr/w:keepNext)]'), 'Body paragraphs must not inherit the template keep-next chain that creates blank pages.');
             $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/w:tr[1]//w:keepNext[@w:val="1"]'), 'Signer headings stay with their images.');
-            $this->assertStringContainsString('B = Backup', $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[1]')->item(0)->textContent, 'Unused template spacers must not push the signer block onto another page.');
+            $this->assertStringContainsString('B = Backup', $dom->textContent, 'Legend is in appendix, not inserted into the original pre-signer spacing.');
             $this->assertCount(1, $xp->query('/w:document/w:body/w:p[w:r/w:drawing]/preceding-sibling::w:p[1]/w:pPr/w:keepNext[@w:val="1"]'), 'Evidence captions stay with their image.');
             $this->assertSame('20163', $xp->query('//w:pgSz')->item(0)->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w'));
             $headerReferences = $xp->query('//w:sectPr/w:headerReference');
@@ -171,7 +269,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $zip->open($path);
             $dom = new DOMDocument;
             $dom->loadXML($zip->getFromName('word/document.xml'));
-            $this->assertStringContainsString('Belum lengkap', $dom->textContent);
+            $this->assertStringContainsString('B: ?', $dom->textContent);
             $this->assertStringContainsString('DRAF', $dom->textContent);
             $this->assertStringNotContainsString('B: Berhasil', $dom->textContent);
             $this->assertStringNotContainsString('Budi', $dom->textContent);

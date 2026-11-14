@@ -61,11 +61,6 @@ class SmkiBackupRestoreDocxService
                 throw new RuntimeException('Struktur template FR-030 berubah.');
             }
             $matrix = $tables->item(0);
-            foreach (iterator_to_array($xp->query('/w:document/w:body/w:p[following-sibling::w:tbl[1] = /w:document/w:body/w:tbl[1]]')) as $leading) {
-                if (trim($leading->textContent) === '' && ! $xp->query('.//w:drawing', $leading)->length) {
-                    $leading->parentNode->removeChild($leading);
-                }
-            }
             $yearCell = $xp->query('w:tr[1]/w:tc[last()]', $matrix)->item(0);
             $this->setCellText($dom, $xp, $yearCell, 'Tahun: '.$report->tahun.($report->status === 'draft' ? ' - DRAF' : ''), 'center');
             foreach ($xp->query('w:tr[position() <= 2]', $matrix) as $heading) {
@@ -76,14 +71,9 @@ class SmkiBackupRestoreDocxService
                 }
                 $properties->appendChild($dom->createElementNS(self::W_NS, 'w:tblHeader'));
             }
-            $rows = $this->ensureDataRows($xp, $matrix, 2, max(1, $report->assets->count()));
-            foreach (array_splice($rows, max(1, $report->assets->count())) as $unusedRow) {
-                $matrix->removeChild($unusedRow);
-            }
+            $templateSlots = $xp->query('w:tr', $matrix)->length - 2;
+            $rows = $this->ensureDataRows($xp, $matrix, 2, max($templateSlots, $report->assets->count()));
             foreach ($rows as $index => $row) {
-                foreach (iterator_to_array($xp->query('w:trPr/w:trHeight', $row)) as $height) {
-                    $height->parentNode->removeChild($height);
-                }
                 $this->preventRowSplit($dom, $xp, $row);
                 $cells = $xp->query('w:tc', $row);
                 $asset = $report->assets->get($index);
@@ -93,18 +83,6 @@ class SmkiBackupRestoreDocxService
                     $text = $asset ? 'B: '.$this->summary($entries?->get('backup'))."\nR: ".$this->summary($entries?->get('restore')) : '';
                     $this->setCellText($dom, $xp, $cells->item($month), $text, 'center');
                 }
-            }
-            $legend = $this->paragraph($dom, 'B = Backup; R = Restore; - = Belum dicatat. Rincian dan bukti kegiatan tercantum pada lampiran.');
-            $this->compactBlock($dom, $xp, $matrix);
-            $this->compactBlock($dom, $xp, $legend);
-            $matrix->parentNode->insertBefore($legend, $matrix->nextSibling);
-            $spacer = $legend->nextSibling;
-            while ($spacer && $spacer !== $tables->item(1)) {
-                $next = $spacer->nextSibling;
-                if ($spacer->localName === 'p' && trim($spacer->textContent) === '') {
-                    $spacer->parentNode->removeChild($spacer);
-                }
-                $spacer = $next;
             }
             $this->signatories($zip, $dom, $xp, $tables->item(1), $report);
             $this->appendix($zip, $dom, $xp, $report);
@@ -181,13 +159,13 @@ class SmkiBackupRestoreDocxService
     private function summary(?SmkiBackupRestoreEntry $entry): string
     {
         if (! $entry) {
-            return '-';
+            return '–';
         }
         if (! $entry->result || ! $entry->performed_on) {
-            return 'Belum lengkap';
+            return '?';
         }
 
-        return ucfirst($entry->result).' '.$entry->performed_on->format('d/m');
+        return $entry->result === 'berhasil' ? '✓' : '×';
     }
 
     private function paragraph(DOMDocument $dom, string $text): DOMNode
@@ -198,60 +176,9 @@ class SmkiBackupRestoreDocxService
         return $p;
     }
 
-    private function compactBlock(DOMDocument $dom, DOMXPath $xp, DOMNode $block): void
-    {
-        $paragraphs = $block->localName === 'p' ? [$block] : $xp->query('.//w:p', $block);
-        foreach ($paragraphs as $paragraph) {
-            $pr = $xp->query('w:pPr', $paragraph)->item(0);
-            if (! $pr) {
-                $pr = $dom->createElementNS(self::W_NS, 'w:pPr');
-                $paragraph->insertBefore($pr, $paragraph->firstChild);
-            }
-            foreach (iterator_to_array($xp->query('w:spacing', $pr)) as $old) {
-                $pr->removeChild($old);
-            }
-            $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
-            foreach (['before' => '0', 'after' => '0', 'line' => '220', 'lineRule' => 'auto'] as $key => $value) {
-                $spacing->setAttributeNS(self::W_NS, 'w:'.$key, $value);
-            }
-            $pr->appendChild($spacing);
-        }
-        foreach ($xp->query('.//w:r', $block) as $run) {
-            // Do not shrink drawings: specimen sizing is controlled proportionally at embedding.
-            if ($xp->query('w:drawing', $run)->length) {
-                continue;
-            }
-            $pr = $xp->query('w:rPr', $run)->item(0);
-            if (! $pr) {
-                $pr = $dom->createElementNS(self::W_NS, 'w:rPr');
-                $run->insertBefore($pr, $run->firstChild);
-            }
-            foreach (['sz', 'szCs'] as $name) {
-                foreach (iterator_to_array($xp->query('w:'.$name, $pr)) as $old) {
-                    $pr->removeChild($old);
-                }
-                $size = $dom->createElementNS(self::W_NS, 'w:'.$name);
-                $size->setAttributeNS(self::W_NS, 'w:val', '18');
-                $pr->appendChild($size);
-            }
-        }
-    }
-
     private function signatories(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, DOMNode $table, SmkiBackupRestoreReport $report): void
     {
-        $page = $xp->query('//w:sectPr/w:pgSz')->item(0);
-        $margin = $xp->query('//w:sectPr/w:pgMar')->item(0);
-        $available = (int) $page->getAttributeNS(self::W_NS, 'w') - (int) $margin->getAttributeNS(self::W_NS, 'left') - (int) $margin->getAttributeNS(self::W_NS, 'right');
-        foreach (['w:tblPr/w:tblW' => (string) $available, 'w:tblPr/w:tblInd' => '0'] as $query => $width) {
-            $xp->query($query, $table)->item(0)->setAttributeNS(self::W_NS, 'w:w', $width);
-        }
-        foreach ($xp->query('w:tblGrid/w:gridCol|w:tr/w:tc/w:tcPr/w:tcW', $table) as $node) {
-            $node->setAttributeNS(self::W_NS, 'w:w', (string) intdiv($available, 2));
-        }
         $row = $xp->query('w:tr[2]', $table)->item(0);
-        foreach (iterator_to_array($xp->query('w:trPr/w:trHeight', $row)) as $height) {
-            $height->parentNode->removeChild($height);
-        }
         $this->preventRowSplit($dom, $xp, $row);
         foreach (['pelaksana', 'penanggung-jawab'] as $index => $role) {
             $cell = $xp->query('w:tc', $row)->item($index);
@@ -263,12 +190,11 @@ class SmkiBackupRestoreDocxService
             $cell->appendChild($p);
             $path = $this->specimens->imagePath($report, $role);
             if ($path) {
-                $this->embedImage($zip, $dom, $p, $path, 240);
+                $this->embedImage($zip, $dom, $p, $path, 200);
             } else {
                 $p->appendChild($this->makeRun($dom, 'Belum dipilih'));
             }
         }
-        $this->compactBlock($dom, $xp, $table);
     }
 
     private function appendix(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, SmkiBackupRestoreReport $report): void
@@ -296,6 +222,8 @@ class SmkiBackupRestoreDocxService
             $spacer->parentNode->removeChild($spacer);
             $spacer = $next;
         }
+        $legend = $this->paragraph($dom, 'B = Backup; R = Restore; ✓ = Berhasil; × = Gagal; – = Belum dicatat; ? = Belum lengkap (Draf).');
+        $section->parentNode->insertBefore($legend, $section);
         foreach ($report->assets as $assetIndex => $asset) {
             $previousMonth = null;
             foreach ($asset->entries->sortBy(fn ($entry) => sprintf('%02d-%s', $entry->month, $entry->operation)) as $entry) {
