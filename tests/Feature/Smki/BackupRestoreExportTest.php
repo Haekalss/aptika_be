@@ -83,7 +83,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             foreach ([1, 2, 3] as $month) {
                 $monthLabel = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret'][$month];
                 $cell = $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc['.($month + 1).']')->item(0)->textContent;
-                $this->assertSame('B: ✓R: ✓', $cell);
+                $this->assertSame('B: ✓ 03/0'.$month.'R: ✓ 03/0'.$month, $cell);
                 $this->assertStringContainsString('Backup | Berhasil | 3 '.$monthLabel.' 2026', $doc->textContent);
                 $this->assertStringContainsString('Restore | Berhasil | 3 '.$monthLabel.' 2026', $doc->textContent);
             }
@@ -109,7 +109,9 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             }
             $this->assertCount(7, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Keep five original asset slots for a short report.');
             $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[1]/preceding-sibling::w:p'));
-            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[preceding-sibling::w:tbl]'));
+            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[preceding-sibling::w:tbl][not(normalize-space(.))]'));
+            $this->assertCount(1, $xp->query('/w:document/w:body/w:tbl[1]/following-sibling::*[1][self::w:p][starts-with(normalize-space(.), "B = Backup")]'), 'Legend belongs directly below the monthly matrix.');
+            $this->assertCount(0, $xp->query('/w:document/w:body/w:p[starts-with(normalize-space(.), "B = Backup")][preceding-sibling::w:p[starts-with(normalize-space(.), "LAMPIRAN")]]'), 'Do not duplicate the legend in the appendix.');
             $this->assertCount(0, $xp->query('/w:document/w:body/w:tbl[1]//w:rPr/w:sz[@w:val="18"]'), 'Do not shrink source typography to nine points.');
             $this->assertStringNotContainsString('SWITCH 02', $xp->query('/w:document/w:body/w:tbl[1]')->item(0)->textContent);
             foreach ($xp->query('/w:document/w:body/w:tbl[2]//wp:extent') as $image) {
@@ -128,7 +130,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             ['month' => 1, 'operation' => 'backup', 'result' => 'berhasil', 'performed_on' => '2026-01-31', 'notes' => null],
             ['month' => 1, 'operation' => 'restore', 'result' => 'gagal', 'performed_on' => '2026-01-30', 'notes' => 'Perlu pengujian ulang'],
             ['month' => 2, 'operation' => 'backup', 'result' => 'berhasil', 'performed_on' => null, 'notes' => null],
-            ['month' => 2, 'operation' => 'restore', 'result' => null, 'performed_on' => null, 'notes' => '0'],
+            ['month' => 2, 'operation' => 'restore', 'result' => null, 'performed_on' => '2026-02-02', 'notes' => '0'],
         ];
         $record = $this->postJson('/api/smki/backup-restore', $data)->assertCreated()->json('data');
         $path = $this->get('/api/smki/backup-restore/'.$record['id'].'/export-docx')->assertOk()->baseResponse->getFile()->getPathname();
@@ -139,17 +141,48 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $dom->loadXML($zip->getFromName('word/document.xml'));
             $xp = new DOMXPath($dom);
             $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
-            $this->assertSame('B: ✓R: ×', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[2]')->item(0)->textContent);
-            $this->assertSame('B: ?R: ?', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[3]')->item(0)->textContent);
+            $this->assertSame('B: ✓ 31/01R: × 30/01', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[2]')->item(0)->textContent);
+            $this->assertSame('B: ?R: ? 02/02', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[3]')->item(0)->textContent);
             $this->assertSame('B: –R: –', $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[4]')->item(0)->textContent);
             $this->assertCount(1, $xp->query('/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[2]//w:br'), 'B and R each get their own line.');
             $matrix = $xp->query('/w:document/w:body/w:tbl[1]')->item(0)->textContent;
-            $this->assertStringNotContainsString('31/01', $matrix);
+            $this->assertStringNotContainsString('2026-01-31', $matrix);
             $this->assertStringNotContainsString('Berhasil', $matrix);
             $this->assertStringContainsString('Restore | Gagal | 30 Januari 2026', $dom->textContent);
             $this->assertStringContainsString('Catatan: 0', $dom->textContent);
             $this->assertStringContainsString('✓ = Berhasil', $dom->textContent);
             $this->assertStringContainsString('× = Gagal', $dom->textContent);
+            $zip->close();
+        } finally { @unlink($path); }
+    }
+
+    public function test_evidence_photos_and_captions_are_centered_without_inherited_large_line_spacing(): void
+    {
+        Storage::fake('local');
+        $this->actingAs($this->account(), 'sanctum');
+        $record = $this->postJson('/api/smki/backup-restore', $this->payload())->assertCreated()->json('data');
+        foreach ([[600, 300], [300, 600]] as $index => [$width, $height]) {
+            $this->post('/api/smki/backup-restore/'.$record['id'].'/entries/'.$record['assets'][0]['entries'][0]['id'].'/attachments', [
+                'file' => UploadedFile::fake()->image('proof-'.$index.'.png', $width, $height), 'version' => $index + 1,
+            ], ['Accept' => 'application/json'])->assertCreated();
+        }
+        $path = $this->get('/api/smki/backup-restore/'.$record['id'].'/export-docx')->assertOk()->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new ZipArchive;
+            $zip->open($path);
+            $dom = new DOMDocument;
+            $dom->loadXML($zip->getFromName('word/document.xml'));
+            $xp = new DOMXPath($dom);
+            $xp->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $photos = $xp->query('/w:document/w:body/w:p[w:r/w:drawing]');
+            $this->assertCount(2, $photos);
+            foreach ($photos as $photo) {
+                $this->assertCount(1, $xp->query('w:pPr/w:jc[@w:val="center"]', $photo));
+                $this->assertCount(1, $xp->query('w:pPr/w:spacing[@w:line="240"][@w:lineRule="auto"]', $photo), 'Inline image uses single line spacing, not inherited 1.5 spacing.');
+                $this->assertCount(1, $xp->query('preceding-sibling::w:p[1]/w:pPr/w:jc[@w:val="center"]', $photo));
+                $this->assertCount(1, $xp->query('preceding-sibling::w:p[1]/w:pPr/w:keepNext[@w:val="1"]', $photo));
+                $this->assertCount(1, $xp->query('w:pPr/w:keepNext[@w:val="0"]', $photo), 'Do not chain all photos into one unbreakable group.');
+            }
             $zip->close();
         } finally { @unlink($path); }
     }
@@ -229,7 +262,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             $this->assertCount(7, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Original five asset slots remain, with unused slots blank.');
             $this->assertCount(0, $xp->query('/w:document/w:body//w:p[not(w:pPr/w:keepNext)]'), 'Body paragraphs must not inherit the template keep-next chain that creates blank pages.');
             $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/w:tr[1]//w:keepNext[@w:val="1"]'), 'Signer headings stay with their images.');
-            $this->assertStringContainsString('B = Backup', $dom->textContent, 'Legend is in appendix, not inserted into the original pre-signer spacing.');
+            $this->assertStringContainsString('B = Backup', $dom->textContent);
             $this->assertCount(1, $xp->query('/w:document/w:body/w:p[w:r/w:drawing]/preceding-sibling::w:p[1]/w:pPr/w:keepNext[@w:val="1"]'), 'Evidence captions stay with their image.');
             $this->assertSame('20163', $xp->query('//w:pgSz')->item(0)->getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w'));
             $headerReferences = $xp->query('//w:sectPr/w:headerReference');

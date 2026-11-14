@@ -84,6 +84,8 @@ class SmkiBackupRestoreDocxService
                     $this->setCellText($dom, $xp, $cells->item($month), $text, 'center');
                 }
             }
+            $legend = $this->paragraph($dom, 'B = Backup; R = Restore; ✓ = Berhasil; × = Gagal; – = Belum dicatat; ? = Belum lengkap (Draf).');
+            $matrix->parentNode->insertBefore($legend, $matrix->nextSibling);
             $this->signatories($zip, $dom, $xp, $tables->item(1), $report);
             $this->appendix($zip, $dom, $xp, $report);
             // The source defaults keepNext=true, which chains the whole dynamic body onto blank pages.
@@ -161,11 +163,9 @@ class SmkiBackupRestoreDocxService
         if (! $entry) {
             return '–';
         }
-        if (! $entry->result || ! $entry->performed_on) {
-            return '?';
-        }
+        $symbol = ! $entry->result || ! $entry->performed_on ? '?' : ($entry->result === 'berhasil' ? '✓' : '×');
 
-        return $entry->result === 'berhasil' ? '✓' : '×';
+        return $symbol.($entry->performed_on ? ' '.$entry->performed_on->format('d/m') : '');
     }
 
     private function paragraph(DOMDocument $dom, string $text): DOMNode
@@ -222,8 +222,6 @@ class SmkiBackupRestoreDocxService
             $spacer->parentNode->removeChild($spacer);
             $spacer = $next;
         }
-        $legend = $this->paragraph($dom, 'B = Backup; R = Restore; ✓ = Berhasil; × = Gagal; – = Belum dicatat; ? = Belum lengkap (Draf).');
-        $section->parentNode->insertBefore($legend, $section);
         foreach ($report->assets as $assetIndex => $asset) {
             $previousMonth = null;
             foreach ($asset->entries->sortBy(fn ($entry) => sprintf('%02d-%s', $entry->month, $entry->operation)) as $entry) {
@@ -246,8 +244,17 @@ class SmkiBackupRestoreDocxService
                 }
                 foreach ($entry->attachments->values() as $fileIndex => $file) {
                     abort_unless($file->disk === 'local' && str_starts_with($file->path, 'smki/backup-restore/'.$report->id.'/') && ! str_contains($file->path, '..') && Storage::disk('local')->exists($file->path), 503, 'Bukti kegiatan tidak tersedia.');
-                    $section->parentNode->insertBefore($this->paragraph($dom, 'Bukti '.($fileIndex + 1)), $section);
+                    $caption = $this->paragraph($dom, 'Bukti '.($fileIndex + 1));
+                    $this->setAlign($dom, $xp, $caption, 'center');
+                    $section->parentNode->insertBefore($caption, $section);
                     $p = $this->paragraph($dom, '');
+                    $this->setAlign($dom, $xp, $p, 'center');
+                    // Single spacing avoids inflating the inline photo by the template's 1.5 line height.
+                    $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+                    foreach (['before' => '0', 'after' => '120', 'line' => '240', 'lineRule' => 'auto'] as $key => $value) {
+                        $spacing->setAttributeNS(self::W_NS, 'w:'.$key, $value);
+                    }
+                    $xp->query('w:pPr', $p)->item(0)->appendChild($spacing);
                     $section->parentNode->insertBefore($p, $section);
                     $this->embedImage($zip, $dom, $p, Storage::disk('local')->path($file->path), 640);
                 }
