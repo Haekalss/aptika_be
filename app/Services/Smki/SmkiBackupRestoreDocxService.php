@@ -178,7 +178,17 @@ class SmkiBackupRestoreDocxService
 
     private function signatories(ZipArchive $zip, DOMDocument $dom, DOMXPath $xp, DOMNode $table, SmkiBackupRestoreReport $report): void
     {
+        $spacer = $table->previousSibling;
+        while ($spacer && $spacer->localName === 'p' && trim($spacer->textContent) === '' && ! $xp->query('.//w:drawing|w:pPr/w:sectPr', $spacer)->length) {
+            $previous = $spacer->previousSibling;
+            $spacer->parentNode->removeChild($spacer);
+            $spacer = $previous;
+        }
         $row = $xp->query('w:tr[2]', $table)->item(0);
+        // Fit the specimen instead of reserving the source's manual-signature space.
+        foreach (iterator_to_array($xp->query('w:trPr/w:trHeight', $row)) as $height) {
+            $height->parentNode->removeChild($height);
+        }
         $this->preventRowSplit($dom, $xp, $row);
         foreach (['pelaksana', 'penanggung-jawab'] as $index => $role) {
             $cell = $xp->query('w:tc', $row)->item($index);
@@ -187,6 +197,11 @@ class SmkiBackupRestoreDocxService
             }
             $p = $this->paragraph($dom, '');
             $this->setAlign($dom, $xp, $p, 'center');
+            $spacing = $dom->createElementNS(self::W_NS, 'w:spacing');
+            foreach (['before' => '60', 'after' => '60', 'line' => '240', 'lineRule' => 'auto'] as $key => $value) {
+                $spacing->setAttributeNS(self::W_NS, 'w:'.$key, $value);
+            }
+            $xp->query('w:pPr', $p)->item(0)->appendChild($spacing);
             $cell->appendChild($p);
             $path = $this->specimens->imagePath($report, $role);
             if ($path) {

@@ -98,7 +98,7 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
                 '/w:document/w:body/w:tbl[1]/w:tblGrid',
                 '/w:document/w:body/w:tbl[2]/w:tblPr',
                 '/w:document/w:body/w:tbl[2]/w:tblGrid',
-                '/w:document/w:body/w:tbl[2]/w:tr[2]/w:trPr/w:trHeight',
+                '/w:document/w:body/w:tbl[2]/w:tr[1]/w:trPr/w:trHeight',
                 '//w:sectPr/w:pgSz', '//w:sectPr/w:pgMar',
                 '/w:document/w:body/w:tbl[1]/w:tr[3]/w:tc[1]/w:p/w:pPr/w:spacing',
             ] as $query) {
@@ -109,7 +109,9 @@ class BackupRestoreExportTest extends BackupRestoreTestCase
             }
             $this->assertCount(7, $xp->query('/w:document/w:body/w:tbl[1]/w:tr'), 'Keep five original asset slots for a short report.');
             $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[1]/preceding-sibling::w:p'));
-            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[preceding-sibling::w:tbl][not(normalize-space(.))]'));
+            $this->assertCount(0, $xp->query('/w:document/w:body/w:tbl[2]/preceding-sibling::w:p[preceding-sibling::w:tbl][not(normalize-space(.))]'), 'Do not reserve blank paragraphs above the signer block.');
+            $this->assertCount(0, $xp->query('/w:document/w:body/w:tbl[2]/w:tr[2]/w:trPr/w:trHeight'), 'Signer row must grow with its content, not reserve manual-signature height.');
+            $this->assertCount(2, $xp->query('/w:document/w:body/w:tbl[2]/w:tr[2]/w:tc/w:p/w:pPr/w:spacing[@w:before="60"][@w:after="60"][@w:line="240"][@w:lineRule="auto"]'), 'Fit specimen images with single line spacing and a small inset.');
             $this->assertCount(1, $xp->query('/w:document/w:body/w:tbl[1]/following-sibling::*[1][self::w:p][starts-with(normalize-space(.), "B = Backup")]'), 'Legend belongs directly below the monthly matrix.');
             $this->assertCount(0, $xp->query('/w:document/w:body/w:p[starts-with(normalize-space(.), "B = Backup")][preceding-sibling::w:p[starts-with(normalize-space(.), "LAMPIRAN")]]'), 'Do not duplicate the legend in the appendix.');
             $this->assertCount(0, $xp->query('/w:document/w:body/w:tbl[1]//w:rPr/w:sz[@w:val="18"]'), 'Do not shrink source typography to nine points.');
