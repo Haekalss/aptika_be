@@ -182,11 +182,11 @@ Prefix: `/api/sidebar`
 
 Prefix: `/api/task-management/notifications`
 
-- `GET /api/task-management/notifications` — ambil daftar notifikasi terbaru untuk user login.
-- `GET /api/task-management/notifications/unread-count` — ambil jumlah notifikasi belum dibaca.
-- `PATCH /api/task-management/notifications/{id}/read` — tandai satu notifikasi sebagai dibaca.
-- `PATCH /api/task-management/notifications/read-all` — tandai semua notifikasi sebagai dibaca.
-- `DELETE /api/task-management/notifications/{id}` — hapus notifikasi.
+- `GET /api/task-management/notifications` â€” ambil daftar notifikasi terbaru untuk user login.
+- `GET /api/task-management/notifications/unread-count` â€” ambil jumlah notifikasi belum dibaca.
+- `PATCH /api/task-management/notifications/{id}/read` â€” tandai satu notifikasi sebagai dibaca.
+- `PATCH /api/task-management/notifications/read-all` â€” tandai semua notifikasi sebagai dibaca.
+- `DELETE /api/task-management/notifications/{id}` â€” hapus notifikasi.
 
 Contoh response:
 ```json
@@ -459,3 +459,71 @@ Akses data mengikuti kepemilikan dan bidang: pengguna biasa hanya dapat mengakse
 
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
+---
+---
+
+## 15. SMKI - Pemantauan Manajemen Konfigurasi (FR-048)
+
+**Base URL**: `/api/smki/pemantauan-konfigurasi`  Â·  **Middleware**: `auth:sanctum` + `active` + `service.enabled:SMKI`.
+**Visibility**: semua `admin` melihat seluruh pemantauan; `user` hanya melihat miliknya. Aksi setuju/kembalikan hanya `admin` yang dipilih.
+**Envelope**: `{ "success": true, "data": ..., "message"?, "meta"? }`. Error validasi: `{ "message": "...", "errors": { "field": ["pesan"] } }` (422). Tidak berhak: 403/404.
+
+### Ringkasan status & hasil
+`status`: `draft` (sedang diisi) â†’ `diajukan` (menunggu tinjauan Admin) â†’ `revisi` (dikembalikan, perlu diperbaiki) â†’ `selesai` (disahkan Admin, terkunci permanen).
+`hasil`: `sesuai_seluruhnya` | `ada_ketidaksesuaian`.
+
+### Data Master (khusus `admin`, middleware `role:admin`)
+- `GET /api/smki/pemantauan-konfigurasi/master/jenis` : daftar Jenis Konfigurasi (terurut nama).
+- `POST /api/smki/pemantauan-konfigurasi/master/jenis` : buat. Body: `{ "nama": string, "keterangan"?, "isActive"?: bool }`. Nama unik.
+- `PUT /api/smki/pemantauan-konfigurasi/master/jenis/{id}` : ubah nama/keterangan/`isActive` (nonaktif, bukan hapus).
+- `GET /api/smki/pemantauan-konfigurasi/master/objek` : daftar objek (+`jenisKonfigurasiNama`).
+- `POST /api/smki/pemantauan-konfigurasi/master/objek` : buat. Body: `{ "jenisKonfigurasiId": int (aktif), "nama": string, "isActive"?: bool }`. Nama unik.
+- `PUT /api/smki/pemantauan-konfigurasi/master/objek/{id}` : ubah.
+- `GET /api/smki/pemantauan-konfigurasi/master/nilai-standar` : daftar baris nilai standar; filter opsional `?objek_id=`.
+- `PUT /api/smki/pemantauan-konfigurasi/master/nilai-standar/{objekId}` : **ganti seluruh baris** objek. Body: `{ "rows": [{ "namaKonfigurasi": string, "nilaiStandar": string }] }` (boleh kosong). Semua baris aktif lama dinonaktifkan; baris baru di-insert â€” hanya berlaku untuk pemantauan **baru**.
+
+### Lookup (semua user SMKI)
+- `GET .../lookup/jenis` : `[{ id, nama }]` jenis aktif.
+- `GET .../lookup/objek?jenis_id={id}` : `[{ id, nama }]` objek aktif untuk jenis tersebut.
+- `GET .../lookup/admins` : `[{ id, name, email, position }]` admin aktif (dropdown "Admin yang Mengetahui").
+
+### Alur pemantauan (Pelaksana & Admin)
+- `POST /api/smki/pemantauan-konfigurasi` : buat draft kosong (`status=draft`). Hanya `user`. Respons memberi detail DTO.
+- `GET /api/smki/pemantauan-konfigurasi` : daftar (milik sendiri untuk `user`; semua untuk `admin`). Query opsional: `q` (nama objek/no formulir), `periode` (`1..4`), `jenisId`, `status`, `page`, `perPage`. Paginasi mengembalikan `meta: { page, perPage, total, totalPages }`.
+- `GET /api/smki/pemantauan-konfigurasi/summary` : jumlah per status `{ total, draft, diajukan, revisi, selesai }` (cakupan visibility yang sama).
+- `GET /api/smki/pemantauan-konfigurasi/{id}` : detail lengkap (identifikasi, `objekList` + baris `items` per objek, `riwayat`).
+- `PUT /api/smki/pemantauan-konfigurasi/{id}/identifikasi` : Step 1 (Identitas Dokumen + Identifikasi). Body:
+
+  ```json
+  {
+    "noFormulir": "FR-048/KOM.03.05/SANDIKAMI",
+    "noRevisi": "0.0",
+    "tanggalBerlaku": "2022-11-25",
+    "tanggalPemantauan": "2026-11-16",
+    "periode": 4,
+    "jenisKonfigurasiId": 1,
+    "objekIds": [1, 2]
+  }
+  ```
+  Baris standar (mengikuti master aktif saat itu) dibuat otomatis per objek. Objek yang dilepas dari pilihan dihapus beserta items-nya. Hanya `status=draft` dan pemilik.
+- `PUT /api/smki/pemantauan-konfigurasi/{id}/konfigurasi` : simpan seluruh baris. Body: `{ "items": [...] }` dengan `objekId, namaKonfigurasi, nilaiAktual, nilaiStandar, nilaiStandarId, kesesuaian, isStandar, keterangan`. Baris standar nama/nilainya dipaksa dari snapshot (input `namaKonfigurasi`/`nilaiStandar` untuk baris standar diabaikan). Hanya status `draft`/`revisi`, pemilik.
+- `POST /api/smki/pemantauan-konfigurasi/{id}/periksa` : hitung kesesuaian baris standar (case/trim) dan rekap jumlah + hasil; wajib dilakukan sebelum pengajuan. Status `draft`/`revisi`.
+- `POST /api/smki/pemantauan-konfigurasi/{id}/ajukan` : tandatangani & ajukan. Body: `{ "adminId": int, "catatanTindakLanjut"?: string }`. `adminId` harus `role=admin` + aktif + bukan Pelaksana. Baris `tidak_sesuai` wajib `keterangan`; bila ada, `catatanTindakLanjut` wajib. `siklus` +1 jika status `revisi`. Periksa harus selesai terlebih dahulu.
+- `POST /api/smki/pemantauan-konfigurasi/{id}/selesaikan` : tandatangani & selesaikan. Hanya Admin yang dipilih. Status harus `diajukan`. TTD admin tercatat; pemantauan terkunci (status `selesai`).
+- `POST /api/smki/pemantauan-konfigurasi/{id}/kembalikan` : kembalikan untuk revisi. Hanya Admin yang dipilih. Body: `{ "catatan": string }` wajib.
+- `DELETE /api/smki/pemantauan-konfigurasi/{id}` : hapus draft (soft delete). Hanya pemilik + status `draft`.
+
+### Snapshot & TTE
+Saat `ajukan`/`selesaikan`: `tanggal_ttd_*` dicatat (nama pengguna + waktu server, **bukan** TTD tersertifikasi). `ttd_pelaksana_nama/jabatan` dan `ttd_admin_nama/jabatan` di-snapshot (jabatan dari `position`, default "Pengelola Sistem Informasi / SMKI") agar dokumen historis tidak berubah. Riwayat disimpan **append-only** (`dibuat â†’ diajukan â†’ dikembalikan/disetujui â†’ diajukan_ulang â†’ disetujui`) beserta `snapshot` JSON daftar konfigurasi + ringkas hasil pada momen tersebut.
+
+### Contoh cepat alur
+1. `POST /api/smki/pemantauan-konfigurasi` â†’ `{ "id": 12, "status": "draft", ... }`
+2. `PUT .../12/identifikasi` â†’ baris standar ter-generate.
+3. `PUT .../12/konfigurasi` â†’ isi nilai aktual (baris standar otomatis diperiksa terakhir; baris tanpa standar tandai Kesesuaian manual).
+4. `POST .../12/periksa` â†’ `data.jumlahSesuai/jumlahTidakSesuai`.
+5. `POST .../12/ajukan` â†’ `status="diajukan"`; `GET .../summary` â†’ `diajukan: 1`.
+6. Admin: `POST .../12/selesaikan` â†’ `status="selesai"`; atau `POST .../12/kembalikan` â†’ `status="revisi"`.
+
+### Catatan untuk FE
+FE modul: `["Identifikasi", "Daftar Konfigurasi", "Hasil & Pengajuan"]` â€” cetakan resmi via halaman `/smki/pemantauan-konfigurasi/print/[id]` atau tombol **Unduh PDF/DOCX** di header Detail (client-side jsPDF/docx). Dokumen yang belum berstatus `selesai` dicetak dengan tanda **BELUM FINAL**.
+

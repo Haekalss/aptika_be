@@ -10,6 +10,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Sintaks MODIFY hanya valid di MySQL; lewati di SQLite (phpunit) agar tidak crash.
+        // Di SQLite, kolom tetap NOT NULL dari migrasi create — test tidak pernah mengisi NULL.
+        if (config('database.default') === 'sqlite') {
+            return;
+        }
         DB::statement('ALTER TABLE smki_matrix_competencies MODIFY COLUMN nomor_dokumen VARCHAR(255) NULL');
         DB::statement('ALTER TABLE smki_matrix_competencies MODIFY COLUMN no_revisi VARCHAR(50) NULL');
         DB::statement('ALTER TABLE smki_matrix_competencies MODIFY COLUMN tanggal_berlaku DATE NULL');
@@ -17,6 +22,9 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (config('database.default') === 'sqlite') {
+            return;
+        }
         DB::statement("UPDATE smki_matrix_competencies SET nomor_dokumen = '-' WHERE nomor_dokumen IS NULL");
         DB::statement("UPDATE smki_matrix_competencies SET no_revisi = '-' WHERE no_revisi IS NULL");
         DB::statement("UPDATE smki_matrix_competencies SET tanggal_berlaku = CURDATE() WHERE tanggal_berlaku IS NULL");
