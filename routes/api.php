@@ -1922,6 +1922,40 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
                     'update'  => 'smki.matrix-competency.update',
                     'destroy' => 'smki.matrix-competency.destroy',
                 ]);
+
+            // Pemantauan Manajemen Konfigurasi (FR-048)
+            Route::prefix('pemantauan-konfigurasi')->group(function () {
+                Route::get('summary', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'summary'])->name('smki.pemantauan-konfigurasi.summary');
+                Route::get('/', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'index'])->name('smki.pemantauan-konfigurasi.index');
+                Route::post('/', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'store'])->name('smki.pemantauan-konfigurasi.store');
+                Route::get('/{id}', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'show'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.show');
+                Route::put('/{id}/identifikasi', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'updateIdentifikasi'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.identifikasi');
+                Route::put('/{id}/konfigurasi', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'saveKonfigurasi'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.konfigurasi');
+                Route::post('/{id}/periksa', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'periksaKesesuaian'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.periksa');
+                Route::post('/{id}/ajukan', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'ajukan'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.ajukan');
+                Route::post('/{id}/selesaikan', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'selesaikan'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.selesaikan');
+                Route::post('/{id}/kembalikan', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'kembalikan'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.kembalikan');
+                Route::delete('/{id}', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'destroy'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.destroy');
+
+                // Lookup (terbuka untuk user SMKI)
+                Route::get('lookup/jenis', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'lookupJenis'])->name('smki.pemantauan-konfigurasi.lookup.jenis');
+                Route::get('lookup/objek', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'lookupObjek'])->name('smki.pemantauan-konfigurasi.lookup.objek');
+                Route::get('lookup/admins', [\App\Http\Controllers\Smki\SmkiPemantauanKonfigurasiController::class, 'lookupAdmins'])->name('smki.pemantauan-konfigurasi.lookup.admins');
+
+                // Data Master (khusus admin)
+                Route::middleware('role:admin')->prefix('master')->group(function () {
+                    Route::get('jenis', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'jenisIndex'])->name('smki.pemantauan-konfigurasi.master.jenis.index');
+                    Route::post('jenis', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'jenisStore'])->name('smki.pemantauan-konfigurasi.master.jenis.store');
+                    Route::put('jenis/{id}', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'jenisUpdate'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.master.jenis.update');
+
+                    Route::get('objek', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'objekIndex'])->name('smki.pemantauan-konfigurasi.master.objek.index');
+                    Route::post('objek', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'objekStore'])->name('smki.pemantauan-konfigurasi.master.objek.store');
+                    Route::put('objek/{id}', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'objekUpdate'])->whereNumber('id')->name('smki.pemantauan-konfigurasi.master.objek.update');
+
+                    Route::get('nilai-standar', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'nilaiStandarIndex'])->name('smki.pemantauan-konfigurasi.master.nilai-standar.index');
+                    Route::put('nilai-standar/{objekId}', [\App\Http\Controllers\Smki\SmkiMasterKonfigurasiController::class, 'nilaiStandarUpdate'])->whereNumber('objekId')->name('smki.pemantauan-konfigurasi.master.nilai-standar.update');
+                });
+            });
         });
 
     // =================================================                ]);
