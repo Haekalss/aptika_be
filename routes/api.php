@@ -1477,6 +1477,19 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::get('log-perubahan/lookup', [\App\Http\Controllers\Smki\SmkiLogPerubahanController::class, 'lookup']);
             Route::apiResource('log-perubahan', \App\Http\Controllers\Smki\SmkiLogPerubahanController::class);
 
+            // Formulir Daftar Role / User Access Matrix (FR-033)
+            Route::get('daftar-role/{daftar_role}/export-docx', [\App\Http\Controllers\Smki\SmkiDaftarRoleController::class, 'exportDocx'])
+                ->name('smki.daftar-role.export-docx');
+            Route::get('daftar-role/lookup', [\App\Http\Controllers\Smki\SmkiDaftarRoleController::class, 'lookup']);
+            Route::apiResource('daftar-role', \App\Http\Controllers\Smki\SmkiDaftarRoleController::class)
+                ->names([
+                    'index' => 'smki.daftar-role.index',
+                    'store' => 'smki.daftar-role.store',
+                    'show' => 'smki.daftar-role.show',
+                    'update' => 'smki.daftar-role.update',
+                    'destroy' => 'smki.daftar-role.destroy',
+                ]);
+
             // Formulir Tindakan Perbaikan dan Pencegahan (FR-009)
             Route::get('tindakan-perbaikan/lookup', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'lookup']);
             Route::post('tindakan-perbaikan/{tindakanPerbaikan}/submit', [\App\Http\Controllers\Smki\SmkiTindakanPerbaikanController::class, 'submit']);
