@@ -457,6 +457,101 @@ Akses data mengikuti kepemilikan dan bidang: pengguna biasa hanya dapat mengakse
 
 ---
 
+## Formulir Daftar Role / User Access Matrix (FR-033)
+
+**[Membutuhkan Bearer Token + layanan SMKI aktif]**
+
+Endpoint CRUD untuk formulir daftar role dan hak akses pada setiap unit kerja.
+
+### Endpoint
+
+| Method | Endpoint | Keterangan |
+|---|---|---|
+| `GET` | `/api/smki/daftar-role` | Daftar formulir. Filter: `search`, `status`, `page`, `per_page` (1–100, default 15). Terfilter bidang; Admin Aptika melihat semua |
+| `POST` | `/api/smki/daftar-role` | Simpan formulir baru |
+| `GET` | `/api/smki/daftar-role/{id}` | Detail formulir |
+| `PUT` | `/api/smki/daftar-role/{id}` | Perbarui formulir |
+| `DELETE` | `/api/smki/daftar-role/{id}` | Hapus formulir |
+| `GET` | `/api/smki/daftar-role/{id}/export-docx` | Unduh formulir sebagai DOCX (kop FR-033) |
+| `GET` | `/api/smki/daftar-role/lookup` | Master bidang dan pegawai |
+
+### Body POST / PUT
+
+```json
+{
+  "status": "Draf",
+  "clientId": "3f7c1e2a-....",
+  "documentNumber": "FR-033/KOM.03.05/SANDIKAMI",
+  "revision": "0.0",
+  "effectiveDate": "2022-08-19",
+  "unit": "Bidang Aplikasi Informatika",
+  "roles": [
+    {
+      "id": "uuid-baris",
+      "role": "Administrator",
+      "access": "Melakukan CRUD atau pengaksesan ke semua file/program di dalam sistem..."
+    }
+  ],
+  "note": "Role dapat ditambahkan sesuai dengan kondisi masing-masing Unit Kerja.",
+  "city": "Bandung",
+  "documentDate": "2026-11-18",
+  "preparedById": 12,
+  "approvedById": 15
+}
+```
+
+- `status` wajib: `Draf` atau `Tersimpan`.
+- `clientId` opsional (UUID) untuk idempotensi; pengiriman ulang tidak membuat duplikat.
+- Nama dan NIP penanda tangan diambil server dari master `pegawai`, bukan dari request.
+- Status `Draf` boleh parsial; status `Tersimpan` mewajibkan metadata dokumen, minimal satu role lengkap, serta pembuat dan pihak yang mengetahui.
+
+### Response data
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "1",
+    "number": "FRM-033-2026-000001",
+    "status": "Tersimpan",
+    "documentNumber": "FR-033/KOM.03.05/SANDIKAMI",
+    "revision": "0.0",
+    "effectiveDate": "2022-08-19",
+    "unit": "Bidang Aplikasi Informatika",
+    "roles": [{ "id": "uuid-baris", "role": "Administrator", "access": "..." }],
+    "note": "Role dapat ditambahkan sesuai dengan kondisi masing-masing Unit Kerja.",
+    "city": "Bandung",
+    "documentDate": "2026-11-18",
+    "preparedById": "12",
+    "preparedBy": "Nama Pegawai",
+    "preparedByNip": "19xxxxxxxxxxxxxx",
+    "approvedById": "15",
+    "approvedBy": "Nama Pejabat",
+    "approvedByNip": "19xxxxxxxxxxxxxx",
+    "recorderId": 7,
+    "recorderName": "Admin Aptika",
+    "createdAt": "2026-11-18T...Z",
+    "updatedAt": "2026-11-18T...Z",
+    "permissions": { "can_update": true, "can_delete": true }
+  }
+}
+```
+
+Response `GET /api/smki/daftar-role` juga menyertakan ringkasan dan paginasi:
+
+```json
+{
+  "success": true,
+  "data": [ /* ...formulir... */ ],
+  "stats": { "total": 1, "draf": 0, "tersimpan": 1, "total_roles": 2 },
+  "meta": { "total": 1, "per_page": 15, "current_page": 1, "last_page": 1 }
+}
+```
+
+Akses mengikuti policy `SmkiDaftarRolePolicy`: pengguna dengan bidang hanya melihat/mengubah formulir bidangnya; Admin Aptika melihat seluruh bidang.
+
+---
+
 > [!NOTE]
 > Semua route yang tidak menggunakan `GET` (seperti `POST`, `PUT`, `DELETE`) harus mengirimkan data dalam format `application/json` (Gunakan Header `Content-Type: application/json` dan `Accept: application/json`).
 ---
